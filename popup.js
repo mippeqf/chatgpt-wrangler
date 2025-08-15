@@ -116,7 +116,8 @@ class PopupInterface {
 
     // Status indicator
     const statusIndicator = document.createElement('div');
-    statusIndicator.className = `status-indicator status-${tab.status}`;
+    const statusClass = this.getStatusClass(tab.status);
+    statusIndicator.className = `status-indicator ${statusClass}`;
     tabItem.appendChild(statusIndicator);
 
     // Tab title
@@ -143,13 +144,22 @@ class PopupInterface {
     return tabItem;
   }
 
+  getStatusClass(status) {
+    switch (status) {
+      case 'processing':
+        return 'status-processing';
+      case 'ready':
+        return 'status-completed';
+      default:
+        return 'status-idle';
+    }
+  }
+
   getStatusText(status) {
     switch (status) {
       case 'processing':
         return 'AI responding...';
-      case 'completed':
-        return 'Response ready';
-      case 'idle':
+      case 'ready':
         return 'Ready';
       default:
         return 'Unknown';
