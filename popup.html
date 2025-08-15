@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 350px;
+      min-height: 200px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+    }
+    .header {
+      background: #4a90e2;
+      color: white;
+      padding: 16px;
+      text-align: center;
+      font-weight: 600;
+    }
+    .content {
+      padding: 16px;
+    }
+    .window-group {
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .window-header {
+      background: #e9ecef;
+      padding: 8px 12px;
+      border-radius: 8px 8px 0 0;
+      font-weight: 500;
+      font-size: 14px;
+      color: #495057;
+    }
+    .tab-item {
+      padding: 12px;
+      border-bottom: 1px solid #e9ecef;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tab-item:last-child {
+      border-bottom: none;
+    }
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-processing {
+      background: #dc3545;
+      animation: pulse 2s infinite;
+    }
+    .status-completed {
+      background: #28a745;
+    }
+    .status-idle {
+      background: #6c757d;
+    }
+    .tab-title {
+      flex-grow: 1;
+      font-size: 13px;
+      color: #212529;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .refresh-btn {
+      background: #4a90e2;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin: 16px;
+    }
+    .refresh-btn:hover {
+      background: #357abd;
+    }
+    .no-tabs {
+      text-align: center;
+      color: #6c757d;
+      padding: 20px;
+      font-size: 14px;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    ChatGPT Tab Monitor
+  </div>
+  <div class="content">
+    <div id="tabs-container">
+      <div class="no-tabs">No ChatGPT tabs found</div>
+    </div>
+    <button class="refresh-btn" id="refresh-btn">Refresh</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
