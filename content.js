@@ -3,6 +3,8 @@ class ChatGPTMonitor {
   constructor() {
     this.currentStatus = 'idle';
     this.observer = null;
+    this.lastStatusChange = Date.now();
+    this.statusChangeDelay = 1000; // 1 second delay to avoid rapid status changes
     this.init();
   }
 
@@ -115,55 +117,56 @@ class ChatGPTMonitor {
     const newStatus = this.detectStatus();
     
     if (newStatus !== this.currentStatus) {
-      console.log(`ChatGPT Monitor: Status changed from ${this.currentStatus} to ${newStatus}`);
-      this.currentStatus = newStatus;
-      this.notifyStatusChange(newStatus);
+      // Add a small delay to avoid rapid status changes, especially for completed state
+      const now = Date.now();
+      const timeSinceLastChange = now - this.lastStatusChange;
+      
+      // Allow immediate changes to processing, but delay other changes
+      if (newStatus === 'processing' || timeSinceLastChange >= this.statusChangeDelay) {
+        console.log(`ChatGPT Monitor: Status changed from ${this.currentStatus} to ${newStatus}`);
+        this.currentStatus = newStatus;
+        this.lastStatusChange = now;
+        this.notifyStatusChange(newStatus);
+      }
     }
   }
 
   detectStatus() {
-    // Look for stop button (indicates processing)
-    const stopButton = this.findStopButton();
-    if (stopButton && !stopButton.disabled) {
+    // Look for the specific streaming stop button
+    const streamingButton = this.findStreamingStopButton();
+    if (streamingButton) {
+      console.log('ChatGPT Monitor: Found streaming button - status: processing');
       return 'processing';
     }
 
-    // Look for send button
-    const sendButton = this.findSendButton();
-    if (sendButton) {
-      // If send button is disabled, might be processing
-      if (sendButton.disabled) {
-        return 'processing';
-      } else {
-        // Check if there's content in the input that suggests completion
-        const hasContent = this.hasInputContent();
-        return hasContent ? 'completed' : 'idle';
-      }
-    }
-
-    // Look for streaming indicators
-    if (this.isStreaming()) {
-      return 'processing';
-    }
-
-    // Look for completion indicators
+    // Check if there's a recent response that just completed
     if (this.hasRecentResponse()) {
+      console.log('ChatGPT Monitor: Found recent response - status: completed');
       return 'completed';
     }
 
+    // Default to idle
+    console.log('ChatGPT Monitor: No streaming or recent response - status: idle');
     return 'idle';
   }
 
-  findStopButton() {
-    const selectors = [
-      '[data-testid="stop-button"]',
-      'button[aria-label*="Stop"]',
-      'button:has(svg[data-icon="stop"])',
-      'button:has([data-icon="stop"])',
-      'button:has(svg):has([class*="stop"])'
+  findStreamingStopButton() {
+    // Look for the specific streaming stop button
+    // <button id="composer-submit-button" aria-label="Stop streaming" data-testid="stop-button"
+    const streamingButton = document.querySelector('#composer-submit-button[aria-label="Stop streaming"][data-testid="stop-button"]');
+    
+    if (streamingButton && streamingButton.offsetParent !== null) {
+      return streamingButton;
+    }
+
+    // Fallback selectors in case the structure changes slightly
+    const fallbackSelectors = [
+      'button[aria-label="Stop streaming"]',
+      'button[data-testid="stop-button"][aria-label*="Stop"]',
+      '#composer-submit-button[data-testid="stop-button"]'
     ];
 
-    for (const selector of selectors) {
+    for (const selector of fallbackSelectors) {
       try {
         const element = document.querySelector(selector);
         if (element && element.offsetParent !== null) { // visible
@@ -243,13 +246,11 @@ class ChatGPTMonitor {
   }
 
   hasRecentResponse() {
-    // Look for recent AI responses (completed within last few seconds)
+    // Look for assistant messages that have finished streaming
     const responseSelectors = [
       '[data-message-author-role="assistant"]',
-      '.message.assistant',
-      '[class*="assistant"]',
-      '.response',
-      '[role="article"]:has([class*="assistant"])'
+      '.group\\/conversation-turn[data-testid*="conversation-turn"]:has([data-message-author-role="assistant"])',
+      '.conversation-turn:has([data-message-author-role="assistant"])'
     ];
 
     for (const selector of responseSelectors) {
@@ -257,9 +258,15 @@ class ChatGPTMonitor {
         const elements = document.querySelectorAll(selector);
         if (elements.length > 0) {
           const lastResponse = elements[elements.length - 1];
-          // Simple heuristic: if last response doesn't have streaming indicators
-          const hasStreamingChild = lastResponse.querySelector('.animate-pulse, [class*="streaming"]');
-          return !hasStreamingChild;
+          
+          // Check if this response is not currently streaming
+          // (no stop button means the last response is complete)
+          const hasStreamingButton = this.findStreamingStopButton();
+          if (!hasStreamingButton) {
+            // Check if there's actual content in the last response
+            const hasContent = lastResponse.textContent && lastResponse.textContent.trim().length > 10;
+            return hasContent;
+          }
         }
       } catch (e) {
         continue;
