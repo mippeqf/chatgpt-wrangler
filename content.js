@@ -79,8 +79,14 @@ class ChatGPTMonitor {
 
   isChatPage() {
     const url = window.location.href;
-    // Only monitor pages with /c/ in the path (actual chat conversations)
-    return url.includes("/c/");
+    // Monitor both conversation pages and the main chat interface
+    return (
+      url.includes("/c/") || 
+      url === "https://chat.openai.com/" ||
+      url === "https://chatgpt.com/" ||
+      url.startsWith("https://chat.openai.com/?") ||
+      url.startsWith("https://chatgpt.com/?")
+    );
   }
 
   setupMutationObserver() {

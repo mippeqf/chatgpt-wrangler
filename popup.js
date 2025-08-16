@@ -23,16 +23,41 @@ class PopupInterface {
     this.loadTabs();
   }
 
-  async loadTabs() {
+  async loadTabs(retryCount = 0) {
     try {
+      console.log('Popup: Loading tabs...');
+      this.showLoading();
+      
       const response = await chrome.runtime.sendMessage({ type: 'GET_TABS' });
+      console.log('Popup: Received response:', response);
+      
       if (response && response.tabs) {
         this.displayTabs(response.tabs);
+      } else if (retryCount < 2) {
+        // Retry up to 2 times with a short delay
+        console.log(`Popup: No tabs found, retrying... (attempt ${retryCount + 1})`);
+        setTimeout(() => this.loadTabs(retryCount + 1), 500);
+      } else {
+        console.log('Popup: No tabs found after retries, showing no tabs message');
+        this.showNoTabs();
       }
     } catch (error) {
       console.error('Error loading tabs:', error);
-      this.showError('Failed to load tabs');
+      if (retryCount < 2) {
+        console.log(`Popup: Error occurred, retrying... (attempt ${retryCount + 1})`);
+        setTimeout(() => this.loadTabs(retryCount + 1), 500);
+      } else {
+        this.showError('Failed to load tabs');
+      }
     }
+  }
+
+  showLoading() {
+    this.tabsContainer.innerHTML = `
+      <div class="no-tabs">
+        Loading ChatGPT tabs...
+      </div>
+    `;
   }
 
   async refreshTabs() {

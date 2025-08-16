@@ -28,36 +28,56 @@ class ChatGPTTabManager {
   }
 
   async scanExistingTabs() {
+    console.log("Background: Starting to scan existing tabs");
     try {
-      const tabs = await chrome.tabs.query({});
-      for (const tab of tabs) {
-        if (this.isChatGPTTab(tab.url)) {
-          // Initialize with a neutral state, content script will provide status
-          this.tabStatuses.set(tab.id, {
-            status: "ready", // Assume ready until told otherwise
-            baseTitle: this.cleanTitle(tab.title),
-            url: tab.url,
-            windowId: tab.windowId,
+      // Query specifically for ChatGPT tabs first for better performance
+      const allTabs = await chrome.tabs.query({});
+      const chatGPTTabs = allTabs.filter(tab => this.isChatGPTTab(tab.url));
+      
+      console.log(`Background: Found ${chatGPTTabs.length} ChatGPT tabs out of ${allTabs.length} total tabs`);
+      
+      for (const tab of chatGPTTabs) {
+        console.log(`Background: Initializing tab ${tab.id}: ${tab.title}`);
+        // Initialize with a neutral state, content script will provide status
+        this.tabStatuses.set(tab.id, {
+          status: "ready", // Assume ready until told otherwise
+          baseTitle: this.cleanTitle(tab.title) || 'ChatGPT',
+          url: tab.url,
+          windowId: tab.windowId,
+        });
+        
+        // Inject content script immediately for existing tabs
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ["content.js"],
           });
-          // Content script will handle title updates
+        } catch (scriptError) {
+          console.log(`Background: Could not inject script into tab ${tab.id}:`, scriptError);
         }
       }
+      
       this.updateBadge();
+      this.updatePopup(); // Ensure popup gets updated immediately
+      console.log("Background: Finished scanning existing tabs");
     } catch (error) {
       console.error("Error scanning existing tabs:", error);
     }
   }
 
   handleMessage(message, sender, sendResponse) {
-    if (!sender.tab) return;
-
+    console.log(`Background: Received message: ${message.type}`);
+    
     switch (message.type) {
       case "STATUS_CHANGE":
+        if (!sender.tab) return;
         this.updateTabStatus(sender.tab.id, message.status, sender.tab, message.baseTitle);
         sendResponse({ success: true });
         break;
       case "GET_TABS":
-        sendResponse({ tabs: this.getTabsByWindow() });
+        const tabs = this.getTabsByWindow();
+        console.log(`Background: Sending ${Object.keys(tabs).length} windows with tabs:`, tabs);
+        sendResponse({ tabs: tabs });
         break;
       case "REFRESH_TABS":
         this.refreshAllTabs();
@@ -153,8 +173,15 @@ class ChatGPTTabManager {
 
   isChatGPTTab(url) {
     if (!url) return false;
-    // Monitor actual chat pages, not the homepage
-    return (url.startsWith("https://chat.openai.com/c/") || url.startsWith("https://chatgpt.com/c/"));
+    // Monitor actual chat pages and the main chat interface
+    return (
+      url.startsWith("https://chat.openai.com/c/") || 
+      url.startsWith("https://chatgpt.com/c/") ||
+      url === "https://chat.openai.com/" ||
+      url === "https://chatgpt.com/" ||
+      url.startsWith("https://chat.openai.com/?") ||
+      url.startsWith("https://chatgpt.com/?")
+    );
   }
 
   getTabsByWindow() {
