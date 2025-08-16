@@ -1,162 +1,177 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body {
-      width: 350px;
-      min-height: 200px;
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f8f9fa;
-    }
-    .header {
-      background: #4a90e2;
-      color: white;
-      padding: 16px;
-      text-align: center;
-      font-weight: 600;
-    }
-    .content {
-      padding: 16px;
-    }
-    .window-group {
-      background: white;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .window-header {
-      background: #e9ecef;
-      padding: 8px 12px;
-      border-radius: 8px 8px 0 0;
-      font-weight: 500;
-      font-size: 14px;
-      color: #495057;
-    }
-    .tab-item {
-      padding: 12px;
-      border-bottom: 1px solid #e9ecef;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .tab-item:last-child {
-      border-bottom: none;
-    }
-    .status-indicator {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .status-processing {
-      background: #dc3545;
-      animation: pulse 2s infinite;
-    }
-    .status-idle {
-      background: #28a745;
-    }
-    .tab-title {
-      flex-grow: 1;
-      font-size: 13px;
-      color: #212529;
-      text-overflow: ellipsis;
-      overflow: hidden;
-      white-space: nowrap;
-    }
-    .status-text {
-      font-size: 11px;
-      color: #6c757d;
-      flex-shrink: 0;
-    }
-    .refresh-btn {
-      background: #4a90e2;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      margin: 16px;
-    }
-    .refresh-btn:hover {
-      background: #357abd;
-    }
-    .no-tabs {
-      text-align: center;
-      color: #6c757d;
-      padding: 20px;
-      font-size: 14px;
-    }
-    .debug-toggle {
-      background: #6c757d;
-      color: white;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 11px;
-      margin: 8px 16px;
-    }
-    .debug-toggle:hover {
-      background: #5a6268;
-    }
-    .debug-toggle.active {
-      background: #28a745;
-    }
-    .debug-info {
-      background: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-      margin: 16px;
-      padding: 12px;
-      font-family: monospace;
-      font-size: 11px;
-      color: #495057;
-      display: none;
-    }
-    .debug-info.show {
-      display: block;
-    }
-    .debug-section {
-      margin-bottom: 8px;
-    }
-    .debug-label {
-      font-weight: bold;
-      color: #212529;
-    }
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.5; }
-      100% { opacity: 1; }
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    ChatGPT Tab Monitor
-  </div>
-  <div class="content">
-    <div id="tabs-container">
-      <div class="no-tabs">No ChatGPT tabs found</div>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        width: 350px;
+        min-height: 200px;
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background: #f8f9fa;
+      }
+      .header {
+        background: #4a90e2;
+        color: white;
+        padding: 16px;
+        text-align: center;
+        font-weight: 600;
+        position: relative;
+      }
+      .content {
+        padding: 16px;
+      }
+      .window-group {
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .window-header {
+        background: #e9ecef;
+        padding: 8px 12px;
+        border-radius: 8px 8px 0 0;
+        font-weight: 500;
+        font-size: 14px;
+        color: #495057;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .window-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tab-item {
+        padding: 12px;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tab-item:last-child {
+        border-bottom: none;
+      }
+      .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .status-processing {
+        background: #dc3545;
+        animation: pulse 2s infinite;
+      }
+      .status-idle {
+        background: #28a745;
+      }
+      .tab-title {
+        flex-grow: 1;
+        font-size: 13px;
+        color: #212529;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .status-text {
+        font-size: 11px;
+        color: #6c757d;
+        flex-shrink: 0;
+      }
+      .refresh-btn {
+        background: #4a90e2;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        margin: 16px;
+      }
+      .refresh-btn:hover {
+        background: #357abd;
+      }
+      .no-tabs {
+        text-align: center;
+        color: #6c757d;
+        padding: 20px;
+        font-size: 14px;
+      }
+      .debug-toggle {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        margin: 8px 16px;
+      }
+      .debug-toggle:hover {
+        background: #5a6268;
+      }
+      .debug-toggle.active {
+        background: #28a745;
+      }
+      .debug-info {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        margin: 16px;
+        padding: 12px;
+        font-family: monospace;
+        font-size: 11px;
+        color: #495057;
+        display: none;
+      }
+      .debug-info.show {
+        display: block;
+      }
+      .debug-section {
+        margin-bottom: 8px;
+      }
+      .debug-label {
+        font-weight: bold;
+        color: #212529;
+      }
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">ChatGPT Tab Monitor</div>
+    <div class="content">
+      <div id="tabs-container">
+        <div class="no-tabs">No ChatGPT tabs found</div>
+      </div>
+      <button class="refresh-btn" id="refresh-btn">Refresh</button>
+      <button class="debug-toggle" id="debug-toggle">Debug</button>
+      <div class="debug-info" id="debug-info">
+        <div class="debug-section">
+          <span class="debug-label">ChatGPT Tabs:</span>
+          <span id="debug-tab-count">0</span>
+        </div>
+        <div class="debug-section">
+          <span class="debug-label">Content Script Status:</span>
+          <div id="debug-injection-status"></div>
+        </div>
+        <div class="debug-section">
+          <span class="debug-label">Tab Titles:</span>
+          <div id="debug-tab-titles"></div>
+        </div>
+      </div>
     </div>
-    <button class="refresh-btn" id="refresh-btn">Refresh</button>
-    <button class="debug-toggle" id="debug-toggle">Debug</button>
-    <div class="debug-info" id="debug-info">
-      <div class="debug-section">
-        <span class="debug-label">ChatGPT Tabs:</span> <span id="debug-tab-count">0</span>
-      </div>
-      <div class="debug-section">
-        <span class="debug-label">Content Script Status:</span>
-        <div id="debug-injection-status"></div>
-      </div>
-      <div class="debug-section">
-        <span class="debug-label">Tab Titles:</span>
-        <div id="debug-tab-titles"></div>
-      </div>
-    </div>
-  </div>
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>

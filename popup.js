@@ -155,12 +155,16 @@ class PopupInterface {
     // Remove tabs that no longer exist
     for (const tabId of oldTabIds) {
       if (!newTabIds.has(tabId)) {
-        const tabElement = this.tabsContainer.querySelector(`[data-tab-id="${tabId}"]`);
+        const tabElement = this.tabsContainer.querySelector(
+          `[data-tab-id="${tabId}"]`
+        );
         if (tabElement) {
           tabElement.remove();
         }
       }
     }
+
+    // No alarm buttons anymore
   }
 
   flattenTabsData(tabsByWindow) {
@@ -176,7 +180,7 @@ class PopupInterface {
   hasStructuralChanges(oldData, newData) {
     const oldWindows = Object.keys(oldData).sort();
     const newWindows = Object.keys(newData).sort();
-    
+
     // Check if window count changed
     if (oldWindows.length !== newWindows.length) {
       return true;
@@ -184,8 +188,10 @@ class PopupInterface {
 
     // Check if any window has different tab count
     for (const windowId of oldWindows) {
-      if (!newData[windowId] || 
-          oldData[windowId].length !== newData[windowId].length) {
+      if (
+        !newData[windowId] ||
+        oldData[windowId].length !== newData[windowId].length
+      ) {
         return true;
       }
     }
@@ -202,7 +208,9 @@ class PopupInterface {
   }
 
   updateTabElement(tabId, tab) {
-    const tabElement = this.tabsContainer.querySelector(`[data-tab-id="${tabId}"]`);
+    const tabElement = this.tabsContainer.querySelector(
+      `[data-tab-id="${tabId}"]`
+    );
     if (!tabElement) {
       // Tab doesn't exist in DOM, need full re-render
       this.displayTabs(this.currentTabsData);
@@ -212,7 +220,7 @@ class PopupInterface {
     console.log(`Updating tab ${tabId} with status: ${tab.status}`);
 
     // Update status indicator
-    const statusIndicator = tabElement.querySelector('.status-indicator');
+    const statusIndicator = tabElement.querySelector(".status-indicator");
     if (statusIndicator) {
       const newStatusClass = this.getStatusClass(tab.status);
       console.log(`Setting status class: ${newStatusClass} for tab ${tabId}`);
@@ -220,7 +228,7 @@ class PopupInterface {
     }
 
     // Update title
-    const titleElement = tabElement.querySelector('.tab-title');
+    const titleElement = tabElement.querySelector(".tab-title");
     if (titleElement) {
       const title = tab.title || tab.baseTitle || "ChatGPT";
       titleElement.textContent = title;
@@ -228,7 +236,7 @@ class PopupInterface {
     }
 
     // Update status text
-    const statusTextElement = tabElement.querySelector('.status-text');
+    const statusTextElement = tabElement.querySelector(".status-text");
     if (statusTextElement) {
       statusTextElement.textContent = this.getStatusText(tab.status);
     }
@@ -247,8 +255,10 @@ class PopupInterface {
 
     return `
       <div class="window-group">
-        <div class="window-header">
-          Window ${windowId} (${tabs.length} tab${tabs.length === 1 ? "" : "s"})
+        <div class="window-header" data-window-id="${windowId}">
+          <div class="window-title">Window ${windowId} (${tabs.length} tab${
+      tabs.length === 1 ? "" : "s"
+    })</div>
         </div>
         ${tabsHTML}
       </div>
@@ -300,6 +310,8 @@ class PopupInterface {
           this.focusTab(tabId);
         });
       });
+
+      // No alarm buttons anymore
     } catch (error) {
       console.error("Popup: Error attaching event listeners:", error);
     }
@@ -459,12 +471,12 @@ class PopupInterface {
 
   inferStatusFromTitle(title) {
     if (!title || typeof title !== "string") return "ready";
-    
+
     // Check for red circle emoji indicating processing
     if (title.startsWith("🔴")) {
       return "processing";
     }
-    
+
     // Check for green circle emoji or default to ready
     return "ready";
   }
@@ -472,36 +484,38 @@ class PopupInterface {
   async getTabsByWindow() {
     try {
       const allTabs = await chrome.tabs.query({});
-      const chatGPTTabs = allTabs.filter(tab => this.isChatGPTTab(tab.url));
-      
+      const chatGPTTabs = allTabs.filter((tab) => this.isChatGPTTab(tab.url));
+
       const windows = {};
-      
+
       for (const tab of chatGPTTabs) {
         if (!windows[tab.windowId]) {
           windows[tab.windowId] = [];
         }
-        
+
         const status = this.inferStatusFromTitle(tab.title);
         const baseTitle = this.cleanTitle(tab.title);
         const prefix = status === "processing" ? "🔴 " : "🟢 ";
-        
+
         windows[tab.windowId].push({
           id: tab.id,
           status: status,
           baseTitle: baseTitle,
           title: prefix + baseTitle,
-          url: tab.url
+          url: tab.url,
         });
       }
-      
+
       // Sort tabs in each window
       for (const windowId in windows) {
-        windows[windowId].sort((a, b) => a.baseTitle.localeCompare(b.baseTitle));
+        windows[windowId].sort((a, b) =>
+          a.baseTitle.localeCompare(b.baseTitle)
+        );
       }
-      
+
       return windows;
     } catch (error) {
-      console.error('Error getting tabs by window:', error);
+      console.error("Error getting tabs by window:", error);
       return {};
     }
   }
@@ -509,45 +523,49 @@ class PopupInterface {
   async getDebugInfo() {
     try {
       const allTabs = await chrome.tabs.query({});
-      const chatGPTTabs = allTabs.filter(tab => this.isChatGPTTab(tab.url));
-      
+      const chatGPTTabs = allTabs.filter((tab) => this.isChatGPTTab(tab.url));
+
       // Debug: Also get tabs that might be ChatGPT but don't match our filter
-      const potentialChatGPTTabs = allTabs.filter(tab => 
-        tab.url && (
-          tab.url.includes('chatgpt.com') || 
-          tab.url.includes('chat.openai.com')
-        )
+      const potentialChatGPTTabs = allTabs.filter(
+        (tab) =>
+          tab.url &&
+          (tab.url.includes("chatgpt.com") ||
+            tab.url.includes("chat.openai.com"))
       );
-      
+
       const debugInfo = {
         totalChatGPTTabs: chatGPTTabs.length,
         allChatGPTTabs: [],
         potentialChatGPTCount: potentialChatGPTTabs.length,
-        allMatchingUrls: potentialChatGPTTabs.map(tab => ({ id: tab.id, url: tab.url, matches: this.isChatGPTTab(tab.url) }))
+        allMatchingUrls: potentialChatGPTTabs.map((tab) => ({
+          id: tab.id,
+          url: tab.url,
+          matches: this.isChatGPTTab(tab.url),
+        })),
       };
 
       // Get all ChatGPT tabs with inferred status
       for (const tab of chatGPTTabs) {
         const status = this.inferStatusFromTitle(tab.title);
         const baseTitle = this.cleanTitle(tab.title);
-        
+
         debugInfo.allChatGPTTabs.push({
           id: tab.id,
           currentTitle: tab.title,
           storedBaseTitle: baseTitle,
           url: tab.url,
           status: status,
-          windowId: tab.windowId
+          windowId: tab.windowId,
         });
       }
 
       return debugInfo;
     } catch (error) {
-      console.error('Error getting debug info:', error);
+      console.error("Error getting debug info:", error);
       return {
         totalChatGPTTabs: 0,
         allChatGPTTabs: [],
-        error: error.message
+        error: error.message,
       };
     }
   }

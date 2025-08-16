@@ -316,6 +316,14 @@ class ChatGPTMonitor {
   notifyStatusChange(status) {
     // Update title directly in content script
     this.updateTitle(status);
+
+    // When a tab transitions to ready, request a low chime
+    try {
+      if (status === "ready") {
+        // honor global sound toggle by delegating to background (which checks storage)
+        chrome.runtime.sendMessage({ type: "PLAY_LOW_CHIME" });
+      }
+    } catch (_) {}
   }
 
   destroy() {

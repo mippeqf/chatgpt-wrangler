@@ -3,7 +3,7 @@
   "name": "ChatGPT Wrangler",
   "version": "0.0.1",
   "description": "Monitor ChatGPT tabs processing status with visual indicators",
-  "permissions": ["tabs", "activeTab", "storage", "scripting"],
+  "permissions": ["tabs", "activeTab", "storage", "scripting", "offscreen"],
   "host_permissions": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
   "background": {
     "service_worker": "background.js",
