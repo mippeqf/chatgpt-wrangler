@@ -262,46 +262,30 @@ class PopupInterface {
     // Update tab count
     document.getElementById('debug-tab-count').textContent = debugInfo.totalChatGPTTabs;
     
-    // Update injection status - use allChatGPTTabs if available, fallback to tabs
+    // Remove injection status section
     const injectionStatus = document.getElementById('debug-injection-status');
-    const tabsToCheck = debugInfo.allChatGPTTabs || debugInfo.tabs;
-    const injectedCount = tabsToCheck.filter(tab => tab.contentScriptInjected).length;
-    injectionStatus.innerHTML = `${injectedCount}/${tabsToCheck.length} tabs have content script injected`;
+    injectionStatus.innerHTML = 'Status inference from titles only';
     
     // Update tab titles - show all ChatGPT tabs
     const tabTitles = document.getElementById('debug-tab-titles');
-    const allTabs = debugInfo.allChatGPTTabs || debugInfo.tabs;
+    const allTabs = debugInfo.allChatGPTTabs || [];
     
     if (allTabs.length === 0) {
       tabTitles.innerHTML = 'No ChatGPT tabs found';
     } else {
       const tabsHtml = allTabs.map(tab => {
-        const backgroundColor = tab.tracked ? '#e9ecef' : '#fff3cd';
-        const statusLabel = tab.tracked ? tab.status : 'untracked';
-        const trackingBadge = tab.tracked ? '' : ' <span style="color: #856404; font-weight: bold;">[UNTRACKED]</span>';
-        
         return `
-          <div style="margin: 4px 0; padding: 4px; background: ${backgroundColor}; border-radius: 2px;">
-            <strong>Tab ${tab.id}:</strong>${trackingBadge}<br>
+          <div style="margin: 4px 0; padding: 4px; background: #e9ecef; border-radius: 2px;">
+            <strong>Tab ${tab.id}:</strong><br>
             Current: "${tab.currentTitle}"<br>
-            Stored: "${tab.storedBaseTitle}"<br>
-            Status: ${statusLabel}<br>
-            Injected: ${tab.contentScriptInjected ? '✓' : '✗'}<br>
+            Clean: "${tab.storedBaseTitle}"<br>
+            Status: ${tab.status}<br>
             URL: ${tab.url}
           </div>
         `;
       }).join('');
       
-      const trackedCount = allTabs.filter(tab => tab.tracked).length;
-      const untrackedCount = allTabs.length - trackedCount;
-      
-      const summaryHtml = untrackedCount > 0 ? `
-        <div style="margin-bottom: 8px; padding: 6px; background: #d4edda; border-radius: 2px; font-size: 11px;">
-          <strong>Summary:</strong> ${trackedCount} tracked, ${untrackedCount} untracked
-        </div>
-      ` : '';
-      
-      tabTitles.innerHTML = summaryHtml + tabsHtml;
+      tabTitles.innerHTML = tabsHtml;
     }
     
     if (debugInfo.error) {
