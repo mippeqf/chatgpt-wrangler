@@ -7,9 +7,6 @@ class PopupInterface {
   }
 
   init() {
-    // Load initial tabs
-    this.loadTabs();
-    
     // Set up refresh button
     this.refreshBtn.addEventListener('click', () => {
       this.refreshTabs();
@@ -22,8 +19,8 @@ class PopupInterface {
       }
     });
     
-    // Auto-refresh every 5 seconds
-    setInterval(() => this.loadTabs(), 5000);
+    // Load initial tabs after setting up listeners
+    this.loadTabs();
   }
 
   async loadTabs() {
@@ -57,7 +54,7 @@ class PopupInterface {
   }
 
   displayTabs(tabsByWindow) {
-    this.tabsContainer.innerHTML = '';
+    console.log('Popup: Displaying tabs:', tabsByWindow);
     
     const windowIds = Object.keys(tabsByWindow);
     
@@ -66,12 +63,12 @@ class PopupInterface {
       return;
     }
 
-    windowIds.forEach(windowId => {
-      const tabs = tabsByWindow[windowId];
-      if (tabs && tabs.length > 0) {
-        this.createWindowGroup(parseInt(windowId), tabs);
-      }
-    });
+    // Use template-based rendering
+    const tabsHTML = this.renderTabsTemplate(tabsByWindow);
+    this.tabsContainer.innerHTML = tabsHTML;
+    
+    // Attach event listeners after rendering
+    this.attachTabEventListeners();
   }
 
   showNoTabs() {
@@ -91,65 +88,80 @@ class PopupInterface {
     `;
   }
 
-  createWindowGroup(windowId, tabs) {
-    const windowGroup = document.createElement('div');
-    windowGroup.className = 'window-group';
-
-    // Create window header
-    const windowHeader = document.createElement('div');
-    windowHeader.className = 'window-header';
-    windowHeader.textContent = `Window ${windowId} (${tabs.length} tab${tabs.length === 1 ? '' : 's'})`;
-    windowGroup.appendChild(windowHeader);
-
-    // Create tabs
-    tabs.forEach(tab => {
-      const tabItem = this.createTabItem(tab);
-      windowGroup.appendChild(tabItem);
-    });
-
-    this.tabsContainer.appendChild(windowGroup);
+  renderTabsTemplate(tabsByWindow) {
+    return Object.entries(tabsByWindow)
+      .map(([windowId, tabs]) => this.renderWindowTemplate(windowId, tabs))
+      .join('');
   }
 
-  createTabItem(tab) {
-    const tabItem = document.createElement('div');
-    tabItem.className = 'tab-item';
+  renderWindowTemplate(windowId, tabs) {
+    if (!tabs || tabs.length === 0) return '';
+    
+    const tabsHTML = tabs.map(tab => this.renderTabTemplate(tab)).join('');
+    
+    return `
+      <div class="window-group">
+        <div class="window-header">
+          Window ${windowId} (${tabs.length} tab${tabs.length === 1 ? '' : 's'})
+        </div>
+        ${tabsHTML}
+      </div>
+    `;
+  }
 
-    // Status indicator
-    const statusIndicator = document.createElement('div');
+  renderTabTemplate(tab) {
+    if (!tab || !tab.id) {
+      console.warn('Popup: Invalid tab object:', tab);
+      return '';
+    }
+    
     const statusClass = this.getStatusClass(tab.status);
-    statusIndicator.className = `status-indicator ${statusClass}`;
-    tabItem.appendChild(statusIndicator);
-
-    // Tab title
-    const tabTitle = document.createElement('div');
-    tabTitle.className = 'tab-title';
-    tabTitle.textContent = tab.title || 'ChatGPT';
-    tabTitle.title = tab.url; // Show URL on hover
-    tabItem.appendChild(tabTitle);
-
-    // Status text
-    const statusText = document.createElement('div');
-    statusText.className = 'status-text';
-    statusText.style.fontSize = '11px';
-    statusText.style.color = '#6c757d';
-    statusText.textContent = this.getStatusText(tab.status);
-    tabItem.appendChild(statusText);
-
-    // Click to focus tab
-    tabItem.style.cursor = 'pointer';
-    tabItem.addEventListener('click', () => {
-      this.focusTab(tab.id);
-    });
-
-    return tabItem;
+    const statusText = this.getStatusText(tab.status);
+    const title = tab.title || tab.baseTitle || 'ChatGPT';
+    
+    return `
+      <div class="tab-item" data-tab-id="${tab.id}">
+        <div class="status-indicator ${statusClass}"></div>
+        <div class="tab-title" title="${this.escapeHtml(tab.url || '')}">${this.escapeHtml(title)}</div>
+        <div class="status-text">${statusText}</div>
+      </div>
+    `;
   }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  attachTabEventListeners() {
+    try {
+      // Attach click listeners to all tab items
+      const tabItems = this.tabsContainer.querySelectorAll('.tab-item[data-tab-id]');
+      tabItems.forEach(tabItem => {
+        const tabId = parseInt(tabItem.dataset.tabId);
+        if (isNaN(tabId)) {
+          console.warn('Popup: Invalid tab ID:', tabItem.dataset.tabId);
+          return;
+        }
+        
+        tabItem.style.cursor = 'pointer';
+        tabItem.addEventListener('click', () => {
+          this.focusTab(tabId);
+        });
+      });
+    } catch (error) {
+      console.error('Popup: Error attaching event listeners:', error);
+    }
+  }
+
 
   getStatusClass(status) {
     switch (status) {
       case 'processing':
         return 'status-processing';
       case 'ready':
-        return 'status-completed';
+        return 'status-idle'; // Use consistent naming
       default:
         return 'status-idle';
     }

@@ -1,32 +1,29 @@
 // Background script for managing tabs and updating badges/titles
 class ChatGPTTabManager {
   constructor() {
-    this.tabStatuses = new Map(); // tabId -> { status, url, title, windowId, timestamp, originalTitle }
+    // Simplified state: tabId -> { status, baseTitle, url, windowId }
+    this.tabStatuses = new Map();
     this.init();
   }
 
   init() {
-    // Listen for messages from content scripts
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       this.handleMessage(message, sender, sendResponse);
+      return true; // Keep message channel open for async response
     });
 
-    // Listen for tab updates
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       this.handleTabUpdate(tabId, changeInfo, tab);
     });
 
-    // Listen for tab removal
     chrome.tabs.onRemoved.addListener((tabId) => {
       this.handleTabRemoved(tabId);
     });
 
-    // Listen for window focus changes to update popup
     chrome.windows.onFocusChanged.addListener(() => {
       this.updatePopup();
     });
 
-    // Initial scan of existing tabs
     this.scanExistingTabs();
   }
 
@@ -35,14 +32,14 @@ class ChatGPTTabManager {
       const tabs = await chrome.tabs.query({});
       for (const tab of tabs) {
         if (this.isChatGPTTab(tab.url)) {
+          // Initialize with a neutral state, content script will provide status
           this.tabStatuses.set(tab.id, {
-            status: "ready",
+            status: "ready", // Assume ready until told otherwise
+            baseTitle: this.cleanTitle(tab.title),
             url: tab.url,
-            title: tab.title,
-            originalTitle: tab.title,
             windowId: tab.windowId,
-            timestamp: Date.now(),
           });
+          // Content script will handle title updates
         }
       }
       this.updateBadge();
@@ -52,50 +49,47 @@ class ChatGPTTabManager {
   }
 
   handleMessage(message, sender, sendResponse) {
-    try {
-      if (message.type === "STATUS_CHANGE" && sender.tab) {
-        this.updateTabStatus(sender.tab.id, message.status, sender.tab, message.title);
+    if (!sender.tab) return;
+
+    switch (message.type) {
+      case "STATUS_CHANGE":
+        this.updateTabStatus(sender.tab.id, message.status, sender.tab, message.baseTitle);
         sendResponse({ success: true });
-      } else if (message.type === "GET_TABS") {
+        break;
+      case "GET_TABS":
         sendResponse({ tabs: this.getTabsByWindow() });
-      } else if (message.type === "REFRESH_TABS") {
+        break;
+      case "REFRESH_TABS":
         this.refreshAllTabs();
         sendResponse({ success: true });
-      }
-    } catch (error) {
-      console.error("Error handling message:", error);
-      sendResponse({ success: false, error: error.message });
+        break;
     }
-    return true; // Keep message channel open for async response
   }
 
   handleTabUpdate(tabId, changeInfo, tab) {
     if (this.isChatGPTTab(tab.url)) {
-      // Initialize or update tab info
-      const existingStatus = this.tabStatuses.get(tabId);
-      const status = existingStatus ? existingStatus.status : "ready";
+      const existingTab = this.tabStatuses.get(tabId);
 
-      this.tabStatuses.set(tabId, {
-        status: status,
-        url: tab.url,
-        title: tab.title,
-        originalTitle: existingStatus
-          ? existingStatus.originalTitle
-          : tab.title,
-        capturedTitle: existingStatus ? existingStatus.capturedTitle : null,
-        windowId: tab.windowId,
-        timestamp: existingStatus ? existingStatus.timestamp : Date.now(),
-      });
-
-      // If tab was reloaded, reset to ready
-      if (changeInfo.status === "loading") {
-        this.updateTabStatus(tabId, "ready", tab);
+      // If it's a new tab or the URL changed, initialize its state
+      if (!existingTab || existingTab.url !== tab.url) {
+        this.tabStatuses.set(tabId, {
+          status: "ready", // Default to ready
+          baseTitle: this.cleanTitle(tab.title),
+          url: tab.url,
+          windowId: tab.windowId,
+        });
       }
+      
+      // If the tab has finished loading, ensure content script is there
+      if (changeInfo.status === "complete") {
+        // Content script will handle title updates automatically
+      }
+
     } else if (this.tabStatuses.has(tabId)) {
-      // Tab navigated away from ChatGPT
-      this.restoreTabTitle(tabId);
+      // Tab navigated away from a ChatGPT URL
       this.tabStatuses.delete(tabId);
       this.updateBadge();
+      this.updatePopup();
     }
   }
 
@@ -103,106 +97,39 @@ class ChatGPTTabManager {
     if (this.tabStatuses.has(tabId)) {
       this.tabStatuses.delete(tabId);
       this.updateBadge();
+      this.updatePopup();
     }
   }
 
-  updateTabStatus(tabId, status, tab, currentTitle = null) {
-    console.log(`Background: Updating tab ${tabId} status to ${status}`);
+  updateTabStatus(tabId, newStatus, tab, baseTitle) {
+    console.log(`Background: Updating tab ${tabId} status to ${newStatus}`);
 
-    const existingTab = this.tabStatuses.get(tabId);
-    const titleToUse = currentTitle || tab.title;
-    
-    // When switching from processing to ready, capture the final title
-    let capturedTitle = existingTab ? existingTab.capturedTitle : null;
-    if (status === 'ready' && existingTab && existingTab.status === 'processing') {
-      capturedTitle = titleToUse; // Capture title when processing finishes
+    try {
+      const existingTab = this.tabStatuses.get(tabId) || {};
+
+      // Ensure we have a valid baseTitle
+      let finalBaseTitle = baseTitle;
+      if (!finalBaseTitle) {
+        finalBaseTitle = existingTab.baseTitle || this.cleanTitle(tab.title) || 'ChatGPT';
+      }
+
+      this.tabStatuses.set(tabId, {
+        ...existingTab,
+        status: newStatus,
+        baseTitle: finalBaseTitle,
+        url: tab.url,
+        windowId: tab.windowId,
+      });
+
+      this.updateBadge();
+      this.updatePopup();
+    } catch (error) {
+      console.error(`Background: Error updating tab ${tabId} status:`, error);
     }
-    
-    const tabInfo = {
-      status: status,
-      url: tab.url,
-      title: titleToUse,
-      originalTitle: existingTab ? existingTab.originalTitle : titleToUse,
-      capturedTitle: capturedTitle,
-      windowId: tab.windowId,
-      timestamp: Date.now(),
-    };
-
-    this.tabStatuses.set(tabId, tabInfo);
-
-    // Update tab title and badge
-    this.updateTabTitle(tabId, status);
-    this.updateBadge();
-
-    // Notify popup if open
-    this.updatePopup();
   }
 
-  updateTabTitle(tabId, status) {
-    const tabInfo = this.tabStatuses.get(tabId);
-    if (!tabInfo) return;
-
-    chrome.tabs
-      .get(tabId)
-      .then((currentTab) => {
-        let statusPrefix = "";
-        let baseTitle = "";
-
-        switch (status) {
-          case "processing":
-            statusPrefix = "🔴 ";
-            baseTitle = currentTab.title.replace(/^🔴 |^🟢 /, ''); // Remove existing prefixes
-            break;
-          case "ready":
-            statusPrefix = "🟢 ";
-            // Use captured title from when processing finished, or current title
-            baseTitle = (tabInfo.capturedTitle || currentTab.title).replace(/^🔴 |^🟢 /, '');
-            break;
-        }
-
-        const targetTitle = statusPrefix + baseTitle;
-
-        chrome.scripting
-          .executeScript({
-            target: { tabId: tabId },
-            function: (title) => {
-              document.title = title;
-            },
-            args: [targetTitle],
-          })
-          .catch((error) => {
-            console.log(`Could not update title for tab ${tabId}:`, error);
-          });
-      })
-      .catch((error) => {
-        console.log(`Tab ${tabId} no longer exists:`, error);
-        this.tabStatuses.delete(tabId);
-        this.updateBadge();
-      });
-  }
-
-  restoreTabTitle(tabId) {
-    const tabInfo = this.tabStatuses.get(tabId);
-    if (!tabInfo) return;
-
-    chrome.tabs
-      .get(tabId)
-      .then(() => {
-        chrome.scripting
-          .executeScript({
-            target: { tabId: tabId },
-            function: (originalTitle) => {
-              document.title = originalTitle;
-            },
-            args: [tabInfo.originalTitle || "ChatGPT"],
-          })
-          .catch((error) => {
-            console.log(`Could not restore title for tab ${tabId}:`, error);
-          });
-      })
-      .catch((error) => {
-        console.log(`Tab ${tabId} no longer exists during restore:`, error);
-      });
+  cleanTitle(title) {
+    return title.replace(/^(🔴|🟢)\s+/, "").trim();
   }
 
   updateBadge() {
@@ -210,17 +137,14 @@ class ChatGPTTabManager {
     const processingCount = statuses.filter(
       (tab) => tab.status === "processing"
     ).length;
-    const readyCount = statuses.filter((tab) => tab.status === "ready").length;
 
     let badgeText = "";
-    let badgeColor = "#6c757d"; // gray default
+    let badgeColor = "#dc3545"; // Red for processing
 
     if (processingCount > 0) {
       badgeText = processingCount.toString();
-      badgeColor = "#dc3545"; // red
-    } else if (readyCount > 0) {
-      badgeText = readyCount.toString();
-      badgeColor = "#28a745"; // green
+    } else {
+      badgeText = ""; // No text if nothing is processing
     }
 
     chrome.action.setBadgeText({ text: badgeText });
@@ -229,49 +153,39 @@ class ChatGPTTabManager {
 
   isChatGPTTab(url) {
     if (!url) return false;
-    return url.includes("chat.openai.com") || url.includes("chatgpt.com");
+    // Monitor actual chat pages, not the homepage
+    return (url.startsWith("https://chat.openai.com/c/") || url.startsWith("https://chatgpt.com/c/"));
   }
 
   getTabsByWindow() {
-    const windows = new Map();
-
+    const windows = {};
     for (const [tabId, tabInfo] of this.tabStatuses.entries()) {
-      const windowId = tabInfo.windowId;
-
-      if (!windows.has(windowId)) {
-        windows.set(windowId, []);
+      const { windowId, ...rest } = tabInfo;
+      if (!windows[windowId]) {
+        windows[windowId] = [];
       }
-
-      windows.get(windowId).push({
-        id: tabId,
-        ...tabInfo,
-      });
+      windows[windowId].push({ id: tabId, ...rest });
     }
-
-    // Convert to object for easier serialization
-    const result = {};
-    for (const [windowId, tabs] of windows.entries()) {
-      result[windowId] = tabs.sort((a, b) => a.title.localeCompare(b.title));
+    // Add a title property to each tab for the popup
+    for (const windowId in windows) {
+        windows[windowId].forEach(tab => {
+            let prefix = tab.status === 'processing' ? '🔴 ' : '🟢 ';
+            tab.title = prefix + tab.baseTitle;
+        });
+        windows[windowId].sort((a, b) => a.baseTitle.localeCompare(b.baseTitle));
     }
-
-    return result;
+    return windows;
   }
 
   updatePopup() {
-    // Send message to popup if it's open
-    chrome.runtime
-      .sendMessage({
-        type: "TABS_UPDATED",
-        tabs: this.getTabsByWindow(),
-      })
-      .catch(() => {
-        // Popup might not be open, ignore error
-      });
+    chrome.runtime.sendMessage({
+      type: "TABS_UPDATED",
+      tabs: this.getTabsByWindow(),
+    }).catch(() => { /* Popup not open, ignore */ });
   }
 
   async refreshAllTabs() {
-    // Re-inject content scripts to all ChatGPT tabs
-    for (const [tabId, tabInfo] of this.tabStatuses.entries()) {
+    for (const [tabId] of this.tabStatuses.entries()) {
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tabId },
@@ -281,10 +195,9 @@ class ChatGPTTabManager {
         console.log(`Could not refresh tab ${tabId}:`, error);
       }
     }
-
     this.updatePopup();
   }
 }
 
 // Initialize the tab manager
-const tabManager = new ChatGPTTabManager();
+new ChatGPTTabManager();
