@@ -262,31 +262,69 @@ class PopupInterface {
     // Update tab count
     document.getElementById('debug-tab-count').textContent = debugInfo.totalChatGPTTabs;
     
-    // Update injection status
+    // Update injection status - use allChatGPTTabs if available, fallback to tabs
     const injectionStatus = document.getElementById('debug-injection-status');
-    const injectedCount = debugInfo.tabs.filter(tab => tab.contentScriptInjected).length;
-    injectionStatus.innerHTML = `${injectedCount}/${debugInfo.tabs.length} tabs have content script injected`;
+    const tabsToCheck = debugInfo.allChatGPTTabs || debugInfo.tabs;
+    const injectedCount = tabsToCheck.filter(tab => tab.contentScriptInjected).length;
+    injectionStatus.innerHTML = `${injectedCount}/${tabsToCheck.length} tabs have content script injected`;
     
-    // Update tab titles
+    // Update tab titles - show all ChatGPT tabs
     const tabTitles = document.getElementById('debug-tab-titles');
-    if (debugInfo.tabs.length === 0) {
-      tabTitles.innerHTML = 'No tracked tabs';
+    const allTabs = debugInfo.allChatGPTTabs || debugInfo.tabs;
+    
+    if (allTabs.length === 0) {
+      tabTitles.innerHTML = 'No ChatGPT tabs found';
     } else {
-      const tabsHtml = debugInfo.tabs.map(tab => `
-        <div style="margin: 4px 0; padding: 4px; background: #e9ecef; border-radius: 2px;">
-          <strong>Tab ${tab.id}:</strong><br>
-          Current: "${tab.currentTitle}"<br>
-          Stored: "${tab.storedBaseTitle}"<br>
-          Status: ${tab.status}<br>
-          Injected: ${tab.contentScriptInjected ? '✓' : '✗'}<br>
-          URL: ${tab.url}
+      const tabsHtml = allTabs.map(tab => {
+        const backgroundColor = tab.tracked ? '#e9ecef' : '#fff3cd';
+        const statusLabel = tab.tracked ? tab.status : 'untracked';
+        const trackingBadge = tab.tracked ? '' : ' <span style="color: #856404; font-weight: bold;">[UNTRACKED]</span>';
+        
+        return `
+          <div style="margin: 4px 0; padding: 4px; background: ${backgroundColor}; border-radius: 2px;">
+            <strong>Tab ${tab.id}:</strong>${trackingBadge}<br>
+            Current: "${tab.currentTitle}"<br>
+            Stored: "${tab.storedBaseTitle}"<br>
+            Status: ${statusLabel}<br>
+            Injected: ${tab.contentScriptInjected ? '✓' : '✗'}<br>
+            URL: ${tab.url}
+          </div>
+        `;
+      }).join('');
+      
+      const trackedCount = allTabs.filter(tab => tab.tracked).length;
+      const untrackedCount = allTabs.length - trackedCount;
+      
+      const summaryHtml = untrackedCount > 0 ? `
+        <div style="margin-bottom: 8px; padding: 6px; background: #d4edda; border-radius: 2px; font-size: 11px;">
+          <strong>Summary:</strong> ${trackedCount} tracked, ${untrackedCount} untracked
         </div>
-      `).join('');
-      tabTitles.innerHTML = tabsHtml;
+      ` : '';
+      
+      tabTitles.innerHTML = summaryHtml + tabsHtml;
     }
     
     if (debugInfo.error) {
       tabTitles.innerHTML += `<div style="color: red; margin-top: 8px;">Error: ${debugInfo.error}</div>`;
+    }
+    
+    // Show debug info about URL matching
+    if (debugInfo.potentialChatGPTCount && debugInfo.allMatchingUrls) {
+      tabTitles.innerHTML += `
+        <div style="margin-top: 12px; padding: 6px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 2px; font-size: 10px;">
+          <strong>URL Matching Debug:</strong><br>
+          Total tabs with chatgpt/openai URLs: ${debugInfo.potentialChatGPTCount}<br>
+          Matched by filter: ${debugInfo.totalChatGPTTabs}<br>
+          <details style="margin-top: 4px;">
+            <summary>All ChatGPT-related URLs</summary>
+            ${debugInfo.allMatchingUrls.map(item => `
+              <div style="margin: 2px 0; font-family: monospace;">
+                Tab ${item.id}: ${item.matches ? '✓' : '✗'} ${item.url}
+              </div>
+            `).join('')}
+          </details>
+        </div>
+      `;
     }
   }
 

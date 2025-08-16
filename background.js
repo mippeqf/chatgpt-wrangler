@@ -247,17 +247,54 @@ class ChatGPTTabManager {
   }
 
   async refreshAllTabs() {
-    for (const [tabId] of this.tabStatuses.entries()) {
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tabId },
-          files: ["content.js"],
-        });
-      } catch (error) {
-        console.log(`Could not refresh tab ${tabId}:`, error);
+    try {
+      // Get ALL ChatGPT tabs, not just tracked ones
+      const allTabs = await chrome.tabs.query({});
+      const chatGPTTabs = allTabs.filter(tab => this.isChatGPTTab(tab.url));
+      
+      console.log(`Background: Refreshing ${chatGPTTabs.length} ChatGPT tabs`);
+      
+      for (const tab of chatGPTTabs) {
+        try {
+          // Initialize state for untracked tabs
+          if (!this.tabStatuses.has(tab.id)) {
+            this.tabStatuses.set(tab.id, {
+              status: "ready",
+              baseTitle: this.cleanTitle(tab.title) || "ChatGPT",
+              url: tab.url,
+              windowId: tab.windowId,
+              contentScriptInjected: false,
+            });
+          }
+          
+          // Inject content script
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ["content.js"],
+          });
+          
+          // Mark as injected
+          const tabInfo = this.tabStatuses.get(tab.id);
+          if (tabInfo) {
+            tabInfo.contentScriptInjected = true;
+          }
+          
+          console.log(`Background: Successfully refreshed tab ${tab.id}`);
+        } catch (error) {
+          console.log(`Background: Could not refresh tab ${tab.id}:`, error);
+          // Mark injection as failed
+          const tabInfo = this.tabStatuses.get(tab.id);
+          if (tabInfo) {
+            tabInfo.contentScriptInjected = false;
+          }
+        }
       }
+      
+      this.updateBadge();
+      this.updatePopup();
+    } catch (error) {
+      console.error('Error in refreshAllTabs:', error);
     }
-    this.updatePopup();
   }
 
   async getDebugInfo() {
@@ -266,10 +303,21 @@ class ChatGPTTabManager {
       const allTabs = await chrome.tabs.query({});
       const chatGPTTabs = allTabs.filter(tab => this.isChatGPTTab(tab.url));
       
+      // Debug: Also get tabs that might be ChatGPT but don't match our filter
+      const potentialChatGPTTabs = allTabs.filter(tab => 
+        tab.url && (
+          tab.url.includes('chatgpt.com') || 
+          tab.url.includes('chat.openai.com')
+        )
+      );
+      
       const debugInfo = {
         totalChatGPTTabs: chatGPTTabs.length,
         trackedTabs: this.tabStatuses.size,
-        tabs: []
+        tabs: [],
+        allChatGPTTabs: [],
+        potentialChatGPTCount: potentialChatGPTTabs.length,
+        allMatchingUrls: potentialChatGPTTabs.map(tab => ({ id: tab.id, url: tab.url, matches: this.isChatGPTTab(tab.url) }))
       };
 
       // Get current titles and injection status for each tracked tab
@@ -283,7 +331,8 @@ class ChatGPTTabManager {
             url: tabInfo.url,
             status: tabInfo.status,
             contentScriptInjected: tabInfo.contentScriptInjected,
-            windowId: tabInfo.windowId
+            windowId: tabInfo.windowId,
+            tracked: true
           });
         } catch (error) {
           // Tab might have been closed
@@ -294,9 +343,25 @@ class ChatGPTTabManager {
             url: tabInfo.url,
             status: tabInfo.status,
             contentScriptInjected: tabInfo.contentScriptInjected,
-            windowId: tabInfo.windowId
+            windowId: tabInfo.windowId,
+            tracked: true
           });
         }
+      }
+
+      // Get all ChatGPT tabs (tracked and untracked)
+      for (const tab of chatGPTTabs) {
+        const tabInfo = this.tabStatuses.get(tab.id);
+        debugInfo.allChatGPTTabs.push({
+          id: tab.id,
+          currentTitle: tab.title,
+          storedBaseTitle: tabInfo ? tabInfo.baseTitle : this.cleanTitle(tab.title),
+          url: tab.url,
+          status: tabInfo ? tabInfo.status : 'untracked',
+          contentScriptInjected: tabInfo ? tabInfo.contentScriptInjected : false,
+          windowId: tab.windowId,
+          tracked: !!tabInfo
+        });
       }
 
       return debugInfo;
@@ -306,6 +371,7 @@ class ChatGPTTabManager {
         totalChatGPTTabs: 0,
         trackedTabs: 0,
         tabs: [],
+        allChatGPTTabs: [],
         error: error.message
       };
     }
