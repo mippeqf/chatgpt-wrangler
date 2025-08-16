@@ -63,11 +63,11 @@ class ChatGPTTabManager {
           sendResponse({ debugInfo: { error: error.message } });
         }
         break;
-      case "PLAY_LOW_CHIME":
-        // low chime request from content script when a tab completes
+      case "STATUS_UPDATE":
+        // Tab status changed - evaluate window completion
         try {
-          await this.ensureOffscreen();
-          chrome.runtime.sendMessage({ type: "PLAY_CHIME", variant: "low" });
+          this.updateBadge();
+          this.evaluateWindowChimes();
           sendResponse({ ok: true });
         } catch (e) {
           sendResponse({ ok: false, error: e?.message });
@@ -192,19 +192,7 @@ class ChatGPTTabManager {
 
   // Removed alarm-related methods and notifications
 
-  async ensureOffscreen() {
-    const offscreenUrl = "offscreen.html";
-    // Try to create the offscreen document; if it already exists, this will throw which we ignore
-    try {
-      await chrome.offscreen.createDocument({
-        url: offscreenUrl,
-        reasons: ["AUDIO_PLAYBACK"],
-        justification: "Play notification sound",
-      });
-    } catch (_) {
-      // likely already exists
-    }
-  }
+  // Offscreen methods no longer needed - chimes play directly in content scripts
 
   async evaluateWindowChimes() {
     try {
@@ -233,8 +221,18 @@ class ChatGPTTabManager {
         }
 
         if (allReady) {
-          await this.ensureOffscreen();
-          chrome.runtime.sendMessage({ type: "PLAY_CHIME" });
+          console.log(`Background: Window ${windowId} completed! Playing High C window chime`);
+          // Send window chime message to any content script in this window
+          try {
+            const windowTabs = await chrome.tabs.query({ windowId: parseInt(windowId) });
+            const chatGPTTabs = windowTabs.filter(tab => this.isChatGPTTab(tab.url));
+            if (chatGPTTabs.length > 0) {
+              // Send to the first ChatGPT tab in the window
+              chrome.tabs.sendMessage(chatGPTTabs[0].id, { type: "PLAY_WINDOW_CHIME" });
+            }
+          } catch (e) {
+            console.log("Background: Error sending window chime message:", e);
+          }
           // reset stage to wait for next processing cycle
           stage.started = false;
           this.windowStages[windowId] = stage;
