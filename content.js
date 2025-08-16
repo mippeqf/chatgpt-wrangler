@@ -38,13 +38,18 @@ class ChatGPTMonitor {
   waitForChatInterface(callback) {
     // Check if we're on a chat page first
     if (!this.isChatPage()) {
-      console.log("ChatGPT Monitor: Not on a chat page, skipping interface wait");
+      console.log(
+        "ChatGPT Monitor: Not on a chat page, skipping interface wait"
+      );
       // Still set a base title for non-chat pages
       try {
-        this.baseTitle = this.getCleanTitle() || 'ChatGPT';
+        this.baseTitle = this.getCleanTitle() || "ChatGPT";
       } catch (error) {
-        console.log("ChatGPT Monitor: Error getting title on non-chat page:", error);
-        this.baseTitle = 'ChatGPT';
+        console.log(
+          "ChatGPT Monitor: Error getting title on non-chat page:",
+          error
+        );
+        this.baseTitle = "ChatGPT";
       }
       callback();
       return;
@@ -52,24 +57,32 @@ class ChatGPTMonitor {
 
     const checkInterface = () => {
       // Look for the specific ProseMirror textarea that indicates chat interface is fully loaded
-      const proseMirrorTextarea = document.querySelector('#prompt-textarea.ProseMirror[contenteditable="true"]');
-      
+      const proseMirrorTextarea = document.querySelector(
+        '#prompt-textarea.ProseMirror[contenteditable="true"]'
+      );
+
       if (proseMirrorTextarea) {
-        console.log("ChatGPT Monitor: ProseMirror textarea detected, waiting 250ms before status check");
+        console.log(
+          "ChatGPT Monitor: ProseMirror textarea detected, waiting 250ms before status check"
+        );
         // Store the base title when interface is ready
         try {
-          this.baseTitle = this.getCleanTitle() || 'ChatGPT';
+          this.baseTitle = this.getCleanTitle() || "ChatGPT";
         } catch (error) {
           console.log("ChatGPT Monitor: Error getting initial title:", error);
-          this.baseTitle = 'ChatGPT';
+          this.baseTitle = "ChatGPT";
         }
         // Wait additional 250ms to ensure everything is fully initialized
         setTimeout(() => {
-          console.log("ChatGPT Monitor: Starting status monitoring after delay");
+          console.log(
+            "ChatGPT Monitor: Starting status monitoring after delay"
+          );
           callback();
         }, 250);
       } else {
-        console.log("ChatGPT Monitor: Waiting for ProseMirror textarea to load...");
+        console.log(
+          "ChatGPT Monitor: Waiting for ProseMirror textarea to load..."
+        );
         setTimeout(checkInterface, 500);
       }
     };
@@ -81,7 +94,7 @@ class ChatGPTMonitor {
     const url = window.location.href;
     // Monitor both conversation pages and the main chat interface
     return (
-      url.includes("/c/") || 
+      url.includes("/c/") ||
       url === "https://chat.openai.com/" ||
       url === "https://chatgpt.com/" ||
       url.startsWith("https://chat.openai.com/?") ||
@@ -177,22 +190,43 @@ class ChatGPTMonitor {
 
     const newStatus = this.detectStatus();
 
-    if (newStatus !== this.currentStatus) {
-      // Add a small delay to avoid rapid status changes, especially for completed state
+    // Detect title/baseTitle changes independently of status changes
+    let titleChanged = false;
+    try {
+      const currentCleanTitle = this.getCleanTitle();
+      if (
+        currentCleanTitle &&
+        currentCleanTitle.trim() !== "" &&
+        currentCleanTitle !== this.baseTitle
+      ) {
+        this.baseTitle = currentCleanTitle;
+        titleChanged = true;
+      }
+    } catch (e) {
+      // ignore title read errors
+    }
+
+    const statusChanged = newStatus !== this.currentStatus;
+
+    if (statusChanged || titleChanged) {
       const now = Date.now();
       const timeSinceLastChange = now - this.lastStatusChange;
 
-      // Allow immediate changes to processing, initial status setting, but delay other changes
-      if (
-        this.currentStatus === null || // Allow initial status setting
+      // Rate-limit only status changes; allow immediate title updates
+      const canNotifyStatusChange =
+        this.currentStatus === null ||
         newStatus === "processing" ||
-        timeSinceLastChange >= this.statusChangeDelay
-      ) {
-        console.log(
-          `ChatGPT Monitor: Status changed from ${this.currentStatus} to ${newStatus}`
-        );
-        this.currentStatus = newStatus;
-        this.lastStatusChange = now;
+        timeSinceLastChange >= this.statusChangeDelay;
+
+      if ((statusChanged && canNotifyStatusChange) || titleChanged) {
+        if (statusChanged) {
+          console.log(
+            `ChatGPT Monitor: Status changed from ${this.currentStatus} to ${newStatus}`
+          );
+          this.currentStatus = newStatus;
+          this.lastStatusChange = now;
+        }
+        // Always notify when either status or title changed
         this.notifyStatusChange(newStatus);
       }
     }
@@ -254,25 +288,28 @@ class ChatGPTMonitor {
     try {
       // Update the base title if it has changed (e.g., new conversation started)
       const currentCleanTitle = this.getCleanTitle();
-      if (!this.baseTitle || (currentCleanTitle && currentCleanTitle !== this.baseTitle)) {
-        this.baseTitle = currentCleanTitle || 'ChatGPT';
+      if (
+        !this.baseTitle ||
+        (currentCleanTitle && currentCleanTitle !== this.baseTitle)
+      ) {
+        this.baseTitle = currentCleanTitle || "ChatGPT";
       }
 
       // Ensure we have a valid base title
-      if (!this.baseTitle || this.baseTitle.trim() === '') {
-        this.baseTitle = 'ChatGPT';
+      if (!this.baseTitle || this.baseTitle.trim() === "") {
+        this.baseTitle = "ChatGPT";
       }
 
       // Apply status emoji to title
-      const statusEmoji = status === 'processing' ? '🔴' : '🟢';
+      const statusEmoji = status === "processing" ? "🔴" : "🟢";
       const newTitle = `${statusEmoji} ${this.baseTitle}`;
-      
+
       // Only update if title actually changed to avoid unnecessary DOM updates
       if (document.title !== newTitle) {
         document.title = newTitle;
       }
     } catch (error) {
-      console.log('ChatGPT Monitor: Error updating title:', error);
+      console.log("ChatGPT Monitor: Error updating title:", error);
     }
   }
 
@@ -313,10 +350,16 @@ class ChatGPTMonitor {
   }
 }
 
-// Initialize monitor
-const monitor = new ChatGPTMonitor();
-
-// Cleanup on page unload
-window.addEventListener("beforeunload", () => {
-  monitor.destroy();
-});
+// Initialize monitor (avoid double-injection)
+if (!window.__CHATGPT_MONITOR_ACTIVE__) {
+  window.__CHATGPT_MONITOR_ACTIVE__ = true;
+  const monitor = new ChatGPTMonitor();
+  // Cleanup on page unload
+  window.addEventListener("beforeunload", () => {
+    monitor.destroy();
+  });
+} else {
+  console.log(
+    "ChatGPT Monitor: Already initialized, skipping duplicate injection"
+  );
+}

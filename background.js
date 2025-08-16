@@ -32,20 +32,22 @@ class ChatGPTTabManager {
     try {
       // Query specifically for ChatGPT tabs first for better performance
       const allTabs = await chrome.tabs.query({});
-      const chatGPTTabs = allTabs.filter(tab => this.isChatGPTTab(tab.url));
-      
-      console.log(`Background: Found ${chatGPTTabs.length} ChatGPT tabs out of ${allTabs.length} total tabs`);
-      
+      const chatGPTTabs = allTabs.filter((tab) => this.isChatGPTTab(tab.url));
+
+      console.log(
+        `Background: Found ${chatGPTTabs.length} ChatGPT tabs out of ${allTabs.length} total tabs`
+      );
+
       for (const tab of chatGPTTabs) {
         console.log(`Background: Initializing tab ${tab.id}: ${tab.title}`);
         // Initialize with a neutral state, content script will provide status
         this.tabStatuses.set(tab.id, {
           status: "ready", // Assume ready until told otherwise
-          baseTitle: this.cleanTitle(tab.title) || 'ChatGPT',
+          baseTitle: this.cleanTitle(tab.title) || "ChatGPT",
           url: tab.url,
           windowId: tab.windowId,
         });
-        
+
         // Inject content script immediately for existing tabs
         try {
           await chrome.scripting.executeScript({
@@ -53,10 +55,13 @@ class ChatGPTTabManager {
             files: ["content.js"],
           });
         } catch (scriptError) {
-          console.log(`Background: Could not inject script into tab ${tab.id}:`, scriptError);
+          console.log(
+            `Background: Could not inject script into tab ${tab.id}:`,
+            scriptError
+          );
         }
       }
-      
+
       this.updateBadge();
       this.updatePopup(); // Ensure popup gets updated immediately
       console.log("Background: Finished scanning existing tabs");
@@ -67,16 +72,24 @@ class ChatGPTTabManager {
 
   handleMessage(message, sender, sendResponse) {
     console.log(`Background: Received message: ${message.type}`);
-    
+
     switch (message.type) {
       case "STATUS_CHANGE":
         if (!sender.tab) return;
-        this.updateTabStatus(sender.tab.id, message.status, sender.tab, message.baseTitle);
+        this.updateTabStatus(
+          sender.tab.id,
+          message.status,
+          sender.tab,
+          message.baseTitle
+        );
         sendResponse({ success: true });
         break;
       case "GET_TABS":
         const tabs = this.getTabsByWindow();
-        console.log(`Background: Sending ${Object.keys(tabs).length} windows with tabs:`, tabs);
+        console.log(
+          `Background: Sending ${Object.keys(tabs).length} windows with tabs:`,
+          tabs
+        );
         sendResponse({ tabs: tabs });
         break;
       case "REFRESH_TABS":
@@ -99,12 +112,11 @@ class ChatGPTTabManager {
           windowId: tab.windowId,
         });
       }
-      
+
       // If the tab has finished loading, ensure content script is there
       if (changeInfo.status === "complete") {
         // Content script will handle title updates automatically
       }
-
     } else if (this.tabStatuses.has(tabId)) {
       // Tab navigated away from a ChatGPT URL
       this.tabStatuses.delete(tabId);
@@ -130,7 +142,8 @@ class ChatGPTTabManager {
       // Ensure we have a valid baseTitle
       let finalBaseTitle = baseTitle;
       if (!finalBaseTitle) {
-        finalBaseTitle = existingTab.baseTitle || this.cleanTitle(tab.title) || 'ChatGPT';
+        finalBaseTitle =
+          existingTab.baseTitle || this.cleanTitle(tab.title) || "ChatGPT";
       }
 
       this.tabStatuses.set(tabId, {
@@ -149,6 +162,7 @@ class ChatGPTTabManager {
   }
 
   cleanTitle(title) {
+    if (!title || typeof title !== "string") return "ChatGPT";
     return title.replace(/^(🔴|🟢)\s+/, "").trim();
   }
 
@@ -175,7 +189,7 @@ class ChatGPTTabManager {
     if (!url) return false;
     // Monitor actual chat pages and the main chat interface
     return (
-      url.startsWith("https://chat.openai.com/c/") || 
+      url.startsWith("https://chat.openai.com/c/") ||
       url.startsWith("https://chatgpt.com/c/") ||
       url === "https://chat.openai.com/" ||
       url === "https://chatgpt.com/" ||
@@ -195,20 +209,24 @@ class ChatGPTTabManager {
     }
     // Add a title property to each tab for the popup
     for (const windowId in windows) {
-        windows[windowId].forEach(tab => {
-            let prefix = tab.status === 'processing' ? '🔴 ' : '🟢 ';
-            tab.title = prefix + tab.baseTitle;
-        });
-        windows[windowId].sort((a, b) => a.baseTitle.localeCompare(b.baseTitle));
+      windows[windowId].forEach((tab) => {
+        let prefix = tab.status === "processing" ? "🔴 " : "🟢 ";
+        tab.title = prefix + tab.baseTitle;
+      });
+      windows[windowId].sort((a, b) => a.baseTitle.localeCompare(b.baseTitle));
     }
     return windows;
   }
 
   updatePopup() {
-    chrome.runtime.sendMessage({
-      type: "TABS_UPDATED",
-      tabs: this.getTabsByWindow(),
-    }).catch(() => { /* Popup not open, ignore */ });
+    chrome.runtime
+      .sendMessage({
+        type: "TABS_UPDATED",
+        tabs: this.getTabsByWindow(),
+      })
+      .catch(() => {
+        /* Popup not open, ignore */
+      });
   }
 
   async refreshAllTabs() {
