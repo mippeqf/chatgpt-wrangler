@@ -3,6 +3,9 @@ class PopupInterface {
   constructor() {
     this.tabsContainer = document.getElementById('tabs-container');
     this.refreshBtn = document.getElementById('refresh-btn');
+    this.debugToggle = document.getElementById('debug-toggle');
+    this.debugInfo = document.getElementById('debug-info');
+    this.debugMode = false;
     this.init();
   }
 
@@ -10,6 +13,11 @@ class PopupInterface {
     // Set up refresh button
     this.refreshBtn.addEventListener('click', () => {
       this.refreshTabs();
+    });
+    
+    // Set up debug toggle
+    this.debugToggle.addEventListener('click', () => {
+      this.toggleDebugMode();
     });
     
     // Listen for updates from background script
@@ -219,6 +227,73 @@ class PopupInterface {
     } catch (error) {
       console.error('Error focusing tab:', error);
     }
+  }
+
+  toggleDebugMode() {
+    this.debugMode = !this.debugMode;
+    
+    if (this.debugMode) {
+      this.debugToggle.classList.add('active');
+      this.debugToggle.textContent = 'Debug ON';
+      this.debugInfo.classList.add('show');
+      this.loadDebugInfo();
+    } else {
+      this.debugToggle.classList.remove('active');
+      this.debugToggle.textContent = 'Debug';
+      this.debugInfo.classList.remove('show');
+    }
+  }
+
+  async loadDebugInfo() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_DEBUG_INFO' });
+      if (response && response.debugInfo) {
+        this.displayDebugInfo(response.debugInfo);
+      } else {
+        this.displayDebugError('No debug info received');
+      }
+    } catch (error) {
+      console.error('Error loading debug info:', error);
+      this.displayDebugError('Failed to load debug info: ' + error.message);
+    }
+  }
+
+  displayDebugInfo(debugInfo) {
+    // Update tab count
+    document.getElementById('debug-tab-count').textContent = debugInfo.totalChatGPTTabs;
+    
+    // Update injection status
+    const injectionStatus = document.getElementById('debug-injection-status');
+    const injectedCount = debugInfo.tabs.filter(tab => tab.contentScriptInjected).length;
+    injectionStatus.innerHTML = `${injectedCount}/${debugInfo.tabs.length} tabs have content script injected`;
+    
+    // Update tab titles
+    const tabTitles = document.getElementById('debug-tab-titles');
+    if (debugInfo.tabs.length === 0) {
+      tabTitles.innerHTML = 'No tracked tabs';
+    } else {
+      const tabsHtml = debugInfo.tabs.map(tab => `
+        <div style="margin: 4px 0; padding: 4px; background: #e9ecef; border-radius: 2px;">
+          <strong>Tab ${tab.id}:</strong><br>
+          Current: "${tab.currentTitle}"<br>
+          Stored: "${tab.storedBaseTitle}"<br>
+          Status: ${tab.status}<br>
+          Injected: ${tab.contentScriptInjected ? '✓' : '✗'}<br>
+          URL: ${tab.url}
+        </div>
+      `).join('');
+      tabTitles.innerHTML = tabsHtml;
+    }
+    
+    if (debugInfo.error) {
+      tabTitles.innerHTML += `<div style="color: red; margin-top: 8px;">Error: ${debugInfo.error}</div>`;
+    }
+  }
+
+  displayDebugError(message) {
+    document.getElementById('debug-tab-count').textContent = 'ERROR';
+    document.getElementById('debug-injection-status').textContent = message;
+    document.getElementById('debug-tab-titles').textContent = '';
   }
 }
 

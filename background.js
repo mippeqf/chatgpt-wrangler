@@ -1,7 +1,7 @@
 // Background script for managing tabs and updating badges/titles
 class ChatGPTTabManager {
   constructor() {
-    // Simplified state: tabId -> { status, baseTitle, url, windowId }
+    // Simplified state: tabId -> { status, baseTitle, url, windowId, contentScriptInjected }
     this.tabStatuses = new Map();
     this.init();
   }
@@ -46,6 +46,7 @@ class ChatGPTTabManager {
           baseTitle: this.cleanTitle(tab.title) || "ChatGPT",
           url: tab.url,
           windowId: tab.windowId,
+          contentScriptInjected: false,
         });
 
         // Inject content script immediately for existing tabs
@@ -54,11 +55,21 @@ class ChatGPTTabManager {
             target: { tabId: tab.id },
             files: ["content.js"],
           });
+          // Mark as injected if successful
+          const tabInfo = this.tabStatuses.get(tab.id);
+          if (tabInfo) {
+            tabInfo.contentScriptInjected = true;
+          }
         } catch (scriptError) {
           console.log(
             `Background: Could not inject script into tab ${tab.id}:`,
             scriptError
           );
+          // Mark as failed injection
+          const tabInfo = this.tabStatuses.get(tab.id);
+          if (tabInfo) {
+            tabInfo.contentScriptInjected = false;
+          }
         }
       }
 
@@ -96,6 +107,11 @@ class ChatGPTTabManager {
         this.refreshAllTabs();
         sendResponse({ success: true });
         break;
+      case "GET_DEBUG_INFO":
+        this.getDebugInfo().then(debugInfo => {
+          sendResponse({ debugInfo });
+        });
+        break;
     }
   }
 
@@ -110,6 +126,7 @@ class ChatGPTTabManager {
           baseTitle: this.cleanTitle(tab.title),
           url: tab.url,
           windowId: tab.windowId,
+          contentScriptInjected: false,
         });
       }
 
@@ -241,6 +258,57 @@ class ChatGPTTabManager {
       }
     }
     this.updatePopup();
+  }
+
+  async getDebugInfo() {
+    try {
+      // Get all tabs to compare with our tracked tabs
+      const allTabs = await chrome.tabs.query({});
+      const chatGPTTabs = allTabs.filter(tab => this.isChatGPTTab(tab.url));
+      
+      const debugInfo = {
+        totalChatGPTTabs: chatGPTTabs.length,
+        trackedTabs: this.tabStatuses.size,
+        tabs: []
+      };
+
+      // Get current titles and injection status for each tracked tab
+      for (const [tabId, tabInfo] of this.tabStatuses.entries()) {
+        try {
+          const currentTab = await chrome.tabs.get(tabId);
+          debugInfo.tabs.push({
+            id: tabId,
+            currentTitle: currentTab.title,
+            storedBaseTitle: tabInfo.baseTitle,
+            url: tabInfo.url,
+            status: tabInfo.status,
+            contentScriptInjected: tabInfo.contentScriptInjected,
+            windowId: tabInfo.windowId
+          });
+        } catch (error) {
+          // Tab might have been closed
+          debugInfo.tabs.push({
+            id: tabId,
+            currentTitle: "ERROR: Tab not found",
+            storedBaseTitle: tabInfo.baseTitle,
+            url: tabInfo.url,
+            status: tabInfo.status,
+            contentScriptInjected: tabInfo.contentScriptInjected,
+            windowId: tabInfo.windowId
+          });
+        }
+      }
+
+      return debugInfo;
+    } catch (error) {
+      console.error('Error getting debug info:', error);
+      return {
+        totalChatGPTTabs: 0,
+        trackedTabs: 0,
+        tabs: [],
+        error: error.message
+      };
+    }
   }
 }
 

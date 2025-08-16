@@ -89,6 +89,43 @@
       padding: 20px;
       font-size: 14px;
     }
+    .debug-toggle {
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      margin: 8px 16px;
+    }
+    .debug-toggle:hover {
+      background: #5a6268;
+    }
+    .debug-toggle.active {
+      background: #28a745;
+    }
+    .debug-info {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      margin: 16px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #495057;
+      display: none;
+    }
+    .debug-info.show {
+      display: block;
+    }
+    .debug-section {
+      margin-bottom: 8px;
+    }
+    .debug-label {
+      font-weight: bold;
+      color: #212529;
+    }
     @keyframes pulse {
       0% { opacity: 1; }
       50% { opacity: 0.5; }
@@ -105,6 +142,20 @@
       <div class="no-tabs">No ChatGPT tabs found</div>
     </div>
     <button class="refresh-btn" id="refresh-btn">Refresh</button>
+    <button class="debug-toggle" id="debug-toggle">Debug</button>
+    <div class="debug-info" id="debug-info">
+      <div class="debug-section">
+        <span class="debug-label">ChatGPT Tabs:</span> <span id="debug-tab-count">0</span>
+      </div>
+      <div class="debug-section">
+        <span class="debug-label">Content Script Status:</span>
+        <div id="debug-injection-status"></div>
+      </div>
+      <div class="debug-section">
+        <span class="debug-label">Tab Titles:</span>
+        <div id="debug-tab-titles"></div>
+      </div>
+    </div>
   </div>
   <script src="popup.js"></script>
 </body>
