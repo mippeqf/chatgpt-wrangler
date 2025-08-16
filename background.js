@@ -18,10 +18,6 @@ class ChatGPTTabManager {
       this.handleTabRemoved(tabId);
     });
 
-    chrome.windows.onFocusChanged.addListener(() => {
-      this.updatePopup();
-    });
-
     this.scanExistingTabs();
   }
 
@@ -29,7 +25,6 @@ class ChatGPTTabManager {
     console.log("Background: Starting to scan existing tabs");
     try {
       this.updateBadge();
-      this.updatePopup();
       console.log("Background: Finished scanning existing tabs");
     } catch (error) {
       console.error("Error scanning existing tabs:", error);
@@ -53,10 +48,6 @@ class ChatGPTTabManager {
           sendResponse({ tabs: {} });
         }
         break;
-      case "REFRESH_TABS":
-        this.updatePopup();
-        sendResponse({ success: true });
-        break;
       case "GET_DEBUG_INFO":
         try {
           const debugInfo = await this.getDebugInfo();
@@ -71,16 +62,14 @@ class ChatGPTTabManager {
 
   handleTabUpdate(tabId, changeInfo, tab) {
     if (this.isChatGPTTab(tab.url)) {
-      // Update badge and popup when ChatGPT tabs change
+      // Update badge when ChatGPT tabs change
       this.updateBadge();
-      this.updatePopup();
     }
   }
 
   handleTabRemoved(tabId) {
-    // Update badge and popup when any tab is removed
+    // Update badge when any tab is removed
     this.updateBadge();
-    this.updatePopup();
   }
 
 
@@ -92,18 +81,13 @@ class ChatGPTTabManager {
   inferStatusFromTitle(title) {
     if (!title || typeof title !== "string") return "ready";
     
-    // Check for common patterns that indicate processing
-    const processingPatterns = [
-      /thinking/i,
-      /generating/i,
-      /loading/i,
-      /processing/i,
-      /writing/i,
-      /typing/i,
-      /working/i
-    ];
+    // Check for red circle emoji indicating processing
+    if (title.startsWith("🔴")) {
+      return "processing";
+    }
     
-    return processingPatterns.some(pattern => pattern.test(title)) ? "processing" : "ready";
+    // Check for green circle emoji or default to ready
+    return "ready";
   }
 
   async updateBadge() {
@@ -187,21 +171,6 @@ class ChatGPTTabManager {
     }
   }
 
-  async updatePopup() {
-    try {
-      const tabs = await this.getTabsByWindow();
-      chrome.runtime
-        .sendMessage({
-          type: "TABS_UPDATED",
-          tabs: tabs,
-        })
-        .catch(() => {
-          /* Popup not open, ignore */
-        });
-    } catch (error) {
-      console.error('Error updating popup:', error);
-    }
-  }
 
 
   async getDebugInfo() {

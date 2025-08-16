@@ -316,31 +316,6 @@ class ChatGPTMonitor {
   notifyStatusChange(status) {
     // Update title directly in content script
     this.updateTitle(status);
-
-    // Send message to background script
-    try {
-      if (chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime
-          .sendMessage({
-            type: "STATUS_CHANGE",
-            status: status,
-            baseTitle: this.baseTitle,
-            url: window.location.href,
-            timestamp: Date.now(),
-          })
-          .catch((error) => {
-            console.log(
-              "ChatGPT Monitor: Error sending message to background:",
-              error
-            );
-          });
-      }
-    } catch (error) {
-      console.log(
-        "ChatGPT Monitor: Extension context invalidated, skipping message:",
-        error
-      );
-    }
   }
 
   destroy() {
