@@ -314,30 +314,38 @@ class ChatGPTMonitor {
     }
   }
 
-  notifyStatusChange(status, oldStatus) {
+  async notifyStatusChange(status, oldStatus) {
     // Update title directly in content script
     this.updateTitle(status);
 
-    // Play chimes directly in content script
+    // Notify background and await chime command
     try {
-      if (status === "processing" && oldStatus !== "processing") {
-        console.log("Content: Tab started processing, playing low C chime");
-        this.playLowCChime();
-      } else if (status === "ready" && oldStatus === "processing") {
-        console.log("Content: Tab completed, playing G chime");
-        this.playGChime();
-      }
-    } catch (_) {}
-
-    // Still notify background for window-level coordination
-    try {
-      chrome.runtime.sendMessage({ 
+      const response = await chrome.runtime.sendMessage({ 
         type: "STATUS_UPDATE", 
         status: status, 
         oldStatus: oldStatus,
         tabId: window.location.href
       });
-    } catch (_) {}
+      
+      // Play the chime based on background's decision
+      if (response && response.chimeCommand) {
+        console.log(`Content: Playing chime: ${response.chimeCommand}`);
+        
+        switch (response.chimeCommand) {
+          case "PLAY_PROCESSING_CHIME":
+            this.playLowCChime();
+            break;
+          case "PLAY_TAB_READY_CHIME":
+            this.playGChime();
+            break;
+          case "PLAY_WINDOW_READY_CHIME":
+            this.playHighCChime();
+            break;
+        }
+      }
+    } catch (e) {
+      console.log("Content: Error with status update or chime:", e);
+    }
   }
 
   async playLowCChime() {
@@ -513,15 +521,6 @@ class ChatGPTMonitor {
 if (!window.__CHATGPT_MONITOR_ACTIVE__) {
   window.__CHATGPT_MONITOR_ACTIVE__ = true;
   const monitor = new ChatGPTMonitor();
-  
-  // Listen for window completion chime requests from background
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === "PLAY_WINDOW_CHIME") {
-      console.log("Content: Playing window completion High C chime");
-      monitor.playHighCChime();
-      sendResponse({ ok: true });
-    }
-  });
   
   // Cleanup on page unload
   window.addEventListener("beforeunload", () => {

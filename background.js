@@ -64,11 +64,12 @@ class ChatGPTTabManager {
         }
         break;
       case "STATUS_UPDATE":
-        // Tab status changed - evaluate window completion
+        // Tab status changed - determine which chime to play
         try {
           this.updateBadge();
-          this.evaluateWindowChimes();
-          sendResponse({ ok: true });
+          this.cleanupWindowStages();
+          const chimeCommand = await this.evaluateChimeCommand(message, sender);
+          sendResponse({ ok: true, chimeCommand });
         } catch (e) {
           sendResponse({ ok: false, error: e?.message });
         }
@@ -80,14 +81,14 @@ class ChatGPTTabManager {
     if (this.isChatGPTTab(tab.url)) {
       // Update badge when ChatGPT tabs change
       this.updateBadge();
-      this.evaluateWindowChimes();
+      this.cleanupWindowStages();
     }
   }
 
   handleTabRemoved(tabId) {
     // Update badge when any tab is removed
     this.updateBadge();
-    this.evaluateWindowChimes();
+    this.cleanupWindowStages();
   }
 
   cleanTitle(title) {
@@ -207,7 +208,52 @@ class ChatGPTTabManager {
 
   // Offscreen methods no longer needed - chimes play directly in content scripts
 
-  async evaluateWindowChimes() {
+  async evaluateChimeCommand(message, sender) {
+    const { status, oldStatus } = message;
+    const windowId = sender.tab.windowId.toString();
+    
+    // Processing chime - also mark window stage as started
+    if (status === "processing" && oldStatus !== "processing") {
+      const stage = this.windowStages[windowId] || { started: false };
+      stage.started = true;
+      this.windowStages[windowId] = stage;
+      return "PLAY_PROCESSING_CHIME";
+    }
+    
+    // Ready chime - check if this completes the window
+    if (status === "ready" && oldStatus === "processing") {
+      try {
+        const windows = await this.getTabsByWindow();
+        const tabs = windows[windowId];
+        
+        if (!tabs || tabs.length === 0) {
+          return "PLAY_TAB_READY_CHIME"; // Fallback to tab chime
+        }
+        
+        // Check if all tabs in window are ready
+        const allReady = tabs.every((t) => t.status === "ready");
+        const stage = this.windowStages[windowId] || { started: false };
+        
+        if (allReady && stage.started) {
+          // Window complete! Reset stage and play window chime
+          stage.started = false;
+          this.windowStages[windowId] = stage;
+          return "PLAY_WINDOW_READY_CHIME";
+        } else {
+          // Just this tab is ready
+          return "PLAY_TAB_READY_CHIME";
+        }
+      } catch (error) {
+        console.error("Error evaluating chime command:", error);
+        return "PLAY_TAB_READY_CHIME"; // Fallback
+      }
+    }
+    
+    // No chime needed
+    return null;
+  }
+
+  async cleanupWindowStages() {
     try {
       const windows = await this.getTabsByWindow();
       const knownWindowIds = new Set(Object.keys(windows));
@@ -216,47 +262,6 @@ class ChatGPTTabManager {
       for (const wid of Object.keys(this.windowStages)) {
         if (!knownWindowIds.has(wid)) {
           delete this.windowStages[wid];
-        }
-      }
-
-      for (const [windowId, tabs] of Object.entries(windows)) {
-        if (!tabs || tabs.length === 0) continue;
-        const hasProcessing = tabs.some((t) => t.status === "processing");
-        const allReady = tabs.every((t) => t.status === "ready");
-
-        const stage = this.windowStages[windowId] || { started: false };
-        if (!stage.started) {
-          if (hasProcessing) {
-            stage.started = true;
-            this.windowStages[windowId] = stage;
-          }
-          continue;
-        }
-
-        if (allReady) {
-          console.log(
-            `Background: Window ${windowId} completed! Playing High C window chime`
-          );
-          // Send window chime message to any content script in this window
-          try {
-            const windowTabs = await chrome.tabs.query({
-              windowId: parseInt(windowId),
-            });
-            const chatGPTTabs = windowTabs.filter((tab) =>
-              this.isChatGPTTab(tab.url)
-            );
-            if (chatGPTTabs.length > 0) {
-              // Send to the first ChatGPT tab in the window
-              chrome.tabs.sendMessage(chatGPTTabs[0].id, {
-                type: "PLAY_WINDOW_CHIME",
-              });
-            }
-          } catch (e) {
-            console.log("Background: Error sending window chime message:", e);
-          }
-          // reset stage to wait for next processing cycle
-          stage.started = false;
-          this.windowStages[windowId] = stage;
         }
       }
     } catch (e) {
