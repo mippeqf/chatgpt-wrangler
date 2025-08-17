@@ -55,9 +55,10 @@ class ChimePlayer {
         }
 
         const noiseGain = ctx.createGain();
-        noiseGain.gain.setValueAtTime(
+        noiseGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        noiseGain.gain.exponentialRampToValueAtTime(
           Math.max(0.0001, strikeGainLevel),
-          ctx.currentTime
+          ctx.currentTime + 0.002
         );
         noiseGain.gain.exponentialRampToValueAtTime(
           0.0001,
@@ -80,7 +81,11 @@ class ChimePlayer {
         osc.frequency.value = tone.frequency;
         osc.connect(gain);
         gain.connect(masterGain);
-        gain.gain.value = tone.volume;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(
+          tone.volume,
+          ctx.currentTime + 0.01
+        );
 
         oscillators.push(osc);
         gains.push(gain);
@@ -178,7 +183,7 @@ class ChimePlayer {
 
       oscillators.forEach((osc) => osc.start());
       oscillators.forEach((osc) =>
-        osc.stop(ctx.currentTime + envelope.release + 0.05)
+        osc.stop(ctx.currentTime + envelope.release + 0.1)
       );
     } catch (e) {
       if (this.context === "offscreen") {
@@ -198,7 +203,7 @@ class ChimePlayer {
         { frequency: 523.25, volume: 0.08, type: "sine" }, // C5 second octave
       ],
       envelope: {
-        attack: { value: 1, time: 0.02 },
+        attack: { value: 1, time: 0.015 },
         release: 0.5,
       },
       effects: {
@@ -209,6 +214,22 @@ class ChimePlayer {
 
   async playGChime() {
     await this.createChime({
+      name: "Low C Chime",
+      tones: [
+        { frequency: 130.81, volume: 0.4, type: "sine" }, // C3 fundamental
+        { frequency: 261.63, volume: 0.2, type: "sine" }, // C4 octave
+        { frequency: 523.25, volume: 0.08, type: "sine" }, // C5 second octave
+      ],
+      envelope: {
+        attack: { value: 1, time: 0.015 },
+        release: 0.5,
+      },
+      effects: {
+        reverb: { duration: 0.3, decay: 1.0, wet: 0.5 },
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await this.createChime({
       name: "G Chime",
       tones: [
         { frequency: 196.0, volume: 0.42, type: "sine" }, // G3 fundamental
@@ -217,27 +238,43 @@ class ChimePlayer {
       ],
       envelope: {
         attack: { value: 1, time: 0.018 },
-        release: 0.7,
+        release: 0.5,
       },
       effects: {
-        reverb: { duration: 0.32, decay: 1.1, wet: 1 },
+        reverb: { duration: 0.32, decay: 1.1, wet: 0.5 },
       },
     });
   }
 
   async playHighCChime() {
     await this.createChime({
+      name: "G Chime",
+      tones: [
+        { frequency: 196.0, volume: 0.42, type: "sine" }, // G3 fundamental
+        { frequency: 392.0, volume: 0.25, type: "sine" }, // G4 octave
+        { frequency: 783.99, volume: 0.1, type: "sine" }, // G5 second octave
+      ],
+      envelope: {
+        attack: { value: 1, time: 0.018 },
+        release: 0.5,
+      },
+      effects: {
+        reverb: { duration: 0.32, decay: 1.1, wet: 1 },
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await this.createChime({
       name: "High C Chime",
       tones: [
         { frequency: 261.63, volume: 0.38, type: "sine" }, // C4 fundamental
-        { frequency: 329.63, volume: 0.13, type: "sine" }, // E4 (C4 e)
-        { frequency: 392.0, volume: 0.13, type: "sine" }, // G4 (C4 g)
+        // { frequency: 329.63, volume: 0.13, type: "sine" }, // E4 (C4 e)
+        // { frequency: 392.0, volume: 0.13, type: "sine" }, // G4 (C4 g)
         { frequency: 523.25, volume: 0.22, type: "sine" }, // C5 octave
         { frequency: 1046.5, volume: 0.08, type: "sine" }, // C6 second octave
       ],
       envelope: {
         attack: { value: 1.5, time: 0.02 },
-        release: 1.5,
+        release: 0.7,
       },
       effects: {
         reverb: { duration: 0.5, decay: 0.9, wet: 0.4 },
