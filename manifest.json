@@ -8,7 +8,7 @@
     "48": "icon.png",
     "128": "icon.png"
   },
-  "permissions": ["tabs", "activeTab", "storage", "scripting", "offscreen"],
+  "permissions": ["tabs", "storage"],
   "host_permissions": ["https://chatgpt.com/*"],
   "background": {
     "service_worker": "background.js",
