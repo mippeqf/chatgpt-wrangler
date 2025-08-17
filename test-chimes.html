@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Chime Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      button {
+        margin: 10px;
+        padding: 10px 20px;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Chime Test</h1>
+    <button onclick="testChime('processing')">
+      Test Low C Chime (Processing)
+    </button>
+    <button onclick="testChime('complete')">Test G Chime (Complete)</button>
+    <button onclick="testChime('window')">Test High C Chime (Window)</button>
+
+    <script src="chimes.js"></script>
+    <script>
+      const player = new ChimePlayer();
+
+      function testChime(type) {
+        console.log(`Playing ${type} chime...`);
+        player.playChime(type);
+      }
+    </script>
+  </body>
+</html>
