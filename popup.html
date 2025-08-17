@@ -136,6 +136,66 @@
         font-weight: bold;
         color: #212529;
       }
+      .settings-section {
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        padding: 16px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .settings-title {
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #212529;
+      }
+      .setting-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .setting-label {
+        font-size: 14px;
+        color: #495057;
+      }
+      .toggle-switch {
+        position: relative;
+        width: 44px;
+        height: 24px;
+      }
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: 0.4s;
+        border-radius: 24px;
+      }
+      .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.4s;
+        border-radius: 50%;
+      }
+      input:checked + .toggle-slider {
+        background-color: #4a90e2;
+      }
+      input:checked + .toggle-slider:before {
+        transform: translateX(20px);
+      }
       @keyframes pulse {
         0% {
           opacity: 1;
@@ -152,6 +212,16 @@
   <body>
     <div class="header">ChatGPT Tab Monitor</div>
     <div class="content">
+      <div class="settings-section">
+        <div class="settings-title">Settings</div>
+        <div class="setting-item">
+          <span class="setting-label">Enable Chimes</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chimes-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
       <div id="tabs-container">
         <div class="no-tabs">No ChatGPT tabs found</div>
       </div>
@@ -172,6 +242,7 @@
         </div>
       </div>
     </div>
+    <script src="settings.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

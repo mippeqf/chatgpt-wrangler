@@ -7,6 +7,7 @@ class ChatGPTMonitor {
     this.statusChangeDelay = 1000; // 1 second delay to avoid rapid status changes
     this.baseTitle = null; // Store the clean base title
     this.chimePlayer = new ChimePlayer('content');
+    this.settings = new Settings();
     this.init();
   }
 
@@ -328,8 +329,8 @@ class ChatGPTMonitor {
         tabId: window.location.href
       });
       
-      // Play the chime based on background's decision
-      if (response && response.chimeCommand) {
+      // Play the chime based on background's decision and user settings
+      if (response && response.chimeCommand && this.settings.getChimesEnabled()) {
         console.log(`Content: Playing chime: ${response.chimeCommand}`);
         
         switch (response.chimeCommand) {
@@ -343,6 +344,8 @@ class ChatGPTMonitor {
             this.playHighCChime();
             break;
         }
+      } else if (response && response.chimeCommand && !this.settings.getChimesEnabled()) {
+        console.log(`Content: Chime suppressed (disabled): ${response.chimeCommand}`);
       }
     } catch (e) {
       console.log("Content: Error with status update or chime:", e);

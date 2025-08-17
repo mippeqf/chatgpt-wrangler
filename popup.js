@@ -5,8 +5,10 @@ class PopupInterface {
     this.refreshBtn = document.getElementById("refresh-btn");
     this.debugToggle = document.getElementById("debug-toggle");
     this.debugInfo = document.getElementById("debug-info");
+    this.chimesToggle = document.getElementById("chimes-toggle");
     this.debugMode = false;
     this.currentTabsData = null;
+    this.settings = new Settings();
     this.init();
   }
 
@@ -21,6 +23,9 @@ class PopupInterface {
       this.toggleDebugMode();
     });
 
+    // Set up chimes toggle
+    this.initChimesToggle();
+
     // Load initial tabs
     this.loadTabs();
 
@@ -28,6 +33,19 @@ class PopupInterface {
     this.refreshInterval = setInterval(() => {
       this.loadTabs();
     }, 250);
+  }
+
+  initChimesToggle() {
+    // Load current setting and update UI
+    const chimesEnabled = this.settings.getChimesEnabled();
+    this.chimesToggle.checked = chimesEnabled;
+
+    // Set up event listener
+    this.chimesToggle.addEventListener("change", (e) => {
+      const enabled = e.target.checked;
+      this.settings.setChimesEnabled(enabled);
+      console.log(`Popup: Chimes ${enabled ? 'enabled' : 'disabled'}`);
+    });
   }
 
   async loadTabs() {
