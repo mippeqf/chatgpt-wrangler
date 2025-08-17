@@ -236,11 +236,11 @@ class ChimePlayer {
         { frequency: 1046.5, volume: 0.08, type: "sine" }, // C6 second octave
       ],
       envelope: {
-        attack: { value: 1, time: 0.02 },
-        release: 1,
+        attack: { value: 1.5, time: 0.02 },
+        release: 1.5,
       },
       effects: {
-        reverb: { duration: 0.28, decay: 0.9, wet: 0.14 },
+        reverb: { duration: 0.5, decay: 0.9, wet: 0.4 },
       },
     });
   }
