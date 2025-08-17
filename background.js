@@ -118,21 +118,34 @@ class ChatGPTTabManager {
 
       const totalCount = chatGPTTabs.length;
 
-      let badgeText = "";
-      let badgeColor = "#28a745"; // Green by default
+      // Clear badge and use dynamic icon instead
+      chrome.action.setBadgeText({ text: "" });
 
-      if (totalCount === 0) {
-        badgeText = "";
-      } else if (processingCount > 0) {
-        badgeText = `${processingCount}/${totalCount}`;
-        badgeColor = "#dc3545"; // Red for processing
-      } else {
-        badgeText = totalCount.toString();
-        badgeColor = "#28a745"; // Green for ready
+      // Generate dynamic icon with count
+      const canvas = new OffscreenCanvas(19, 19);
+      const ctx = canvas.getContext("2d");
+
+      // Clear canvas with transparent background
+      ctx.clearRect(0, 0, 19, 19);
+
+      if (totalCount > 0) {
+        const count = processingCount > 0 ? processingCount : totalCount;
+        const textColor = processingCount > 0 ? "#dc2626" : "#166534"; // Red or dark green
+
+        // Draw text only (no background)
+        ctx.fillStyle = textColor;
+        ctx.font =
+          "bold " +
+          (count > 99 ? "12px" : count > 9 ? "16px" : "18px") +
+          " Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(count > 99 ? "99+" : count.toString(), 9.5, 11);
       }
 
-      chrome.action.setBadgeText({ text: badgeText });
-      chrome.action.setBadgeBackgroundColor({ color: badgeColor });
+      // Convert canvas to ImageData and set as icon
+      const imageData = ctx.getImageData(0, 0, 19, 19);
+      chrome.action.setIcon({ imageData: { 19: imageData } });
     } catch (error) {
       console.error("Error updating badge:", error);
     }
@@ -221,14 +234,22 @@ class ChatGPTTabManager {
         }
 
         if (allReady) {
-          console.log(`Background: Window ${windowId} completed! Playing High C window chime`);
+          console.log(
+            `Background: Window ${windowId} completed! Playing High C window chime`
+          );
           // Send window chime message to any content script in this window
           try {
-            const windowTabs = await chrome.tabs.query({ windowId: parseInt(windowId) });
-            const chatGPTTabs = windowTabs.filter(tab => this.isChatGPTTab(tab.url));
+            const windowTabs = await chrome.tabs.query({
+              windowId: parseInt(windowId),
+            });
+            const chatGPTTabs = windowTabs.filter((tab) =>
+              this.isChatGPTTab(tab.url)
+            );
             if (chatGPTTabs.length > 0) {
               // Send to the first ChatGPT tab in the window
-              chrome.tabs.sendMessage(chatGPTTabs[0].id, { type: "PLAY_WINDOW_CHIME" });
+              chrome.tabs.sendMessage(chatGPTTabs[0].id, {
+                type: "PLAY_WINDOW_CHIME",
+              });
             }
           } catch (e) {
             console.log("Background: Error sending window chime message:", e);
