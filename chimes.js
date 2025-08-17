@@ -55,13 +55,13 @@ class ChimePlayer {
         }
 
         const noiseGain = ctx.createGain();
-        noiseGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        noiseGain.gain.exponentialRampToValueAtTime(
-          Math.max(0.0001, strikeGainLevel),
-          ctx.currentTime + 0.002
+        noiseGain.gain.setValueAtTime(0, ctx.currentTime);
+        noiseGain.gain.linearRampToValueAtTime(
+          strikeGainLevel,
+          ctx.currentTime + 0.005
         );
-        noiseGain.gain.exponentialRampToValueAtTime(
-          0.0001,
+        noiseGain.gain.linearRampToValueAtTime(
+          0,
           ctx.currentTime + strikeDuration
         );
 
@@ -81,11 +81,8 @@ class ChimePlayer {
         osc.frequency.value = tone.frequency;
         osc.connect(gain);
         gain.connect(masterGain);
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(
-          tone.volume,
-          ctx.currentTime + 0.01
-        );
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(tone.volume, ctx.currentTime + 0.015);
 
         oscillators.push(osc);
         gains.push(gain);
@@ -198,15 +195,27 @@ class ChimePlayer {
       name: "Low C Chime",
       tones: [
         { frequency: 130.81, volume: 0.4, type: "sine" }, // C3 fundamental
-        { frequency: 261.63, volume: 0.2, type: "sine" }, // C4 octave
-        { frequency: 523.25, volume: 0.08, type: "sine" }, // C5 second octave
+        { frequency: 261.63, volume: 0.35, type: "sine" }, // 2nd harmonic (stronger)
+        { frequency: 392.43, volume: 0.2, type: "sine" }, // 3rd harmonic
+        { frequency: 523.25, volume: 0.15, type: "sine" }, // 4th harmonic
+        { frequency: 654.06, volume: 0.1, type: "sine" }, // 5th harmonic
+        { frequency: 785.0, volume: 0.08, type: "sine" }, // 6th harmonic
+        { frequency: 916.0, volume: 0.05, type: "sine" }, // 7th harmonic
       ],
       envelope: {
-        attack: { value: 1, time: 0.015 },
+        attack: { value: 1, time: 0.002 },
+        sustain: { value: 0.3, time: 0.02 },
         release: 0.5,
       },
+      strike: {
+        duration: 0.004,
+        gain: 0.25,
+        centerHz: 3500,
+        filterType: "highpass",
+        q: 5,
+      },
       effects: {
-        reverb: { duration: 0.3, decay: 1.0, wet: 0.1 },
+        reverb: { duration: 0.4, decay: 0.8, wet: 0.15 },
       },
     });
   }
@@ -216,31 +225,55 @@ class ChimePlayer {
       name: "Low C Chime",
       tones: [
         { frequency: 130.81, volume: 0.4, type: "sine" }, // C3 fundamental
-        { frequency: 261.63, volume: 0.2, type: "sine" }, // C4 octave
-        { frequency: 523.25, volume: 0.08, type: "sine" }, // C5 second octave
+        { frequency: 261.63, volume: 0.35, type: "sine" }, // 2nd harmonic (stronger)
+        { frequency: 392.43, volume: 0.2, type: "sine" }, // 3rd harmonic
+        { frequency: 523.25, volume: 0.15, type: "sine" }, // 4th harmonic
+        { frequency: 654.06, volume: 0.1, type: "sine" }, // 5th harmonic
+        { frequency: 785.0, volume: 0.08, type: "sine" }, // 6th harmonic
+        { frequency: 916.0, volume: 0.05, type: "sine" }, // 7th harmonic
       ],
       envelope: {
-        attack: { value: 1, time: 0.015 },
+        attack: { value: 1, time: 0.002 },
+        sustain: { value: 0.3, time: 0.02 },
         release: 0.5,
       },
+      strike: {
+        duration: 0.004,
+        gain: 0.25,
+        centerHz: 3500,
+        filterType: "highpass",
+        q: 5,
+      },
       effects: {
-        reverb: { duration: 0.3, decay: 1.0, wet: 0.5 },
+        reverb: { duration: 0.4, decay: 0.8, wet: 0.18 },
       },
     });
     await new Promise((resolve) => setTimeout(resolve, 200));
     await this.createChime({
       name: "G Chime",
       tones: [
-        { frequency: 196.0, volume: 0.42, type: "sine" }, // G3 fundamental
-        { frequency: 392.0, volume: 0.25, type: "sine" }, // G4 octave
-        { frequency: 783.99, volume: 0.1, type: "sine" }, // G5 second octave
+        { frequency: 196.0, volume: 0.4, type: "sine" }, // G3 fundamental
+        { frequency: 392.0, volume: 0.35, type: "sine" }, // 2nd harmonic (stronger)
+        { frequency: 588.0, volume: 0.2, type: "sine" }, // 3rd harmonic
+        { frequency: 784.0, volume: 0.15, type: "sine" }, // 4th harmonic
+        { frequency: 980.0, volume: 0.1, type: "sine" }, // 5th harmonic
+        { frequency: 1176.0, volume: 0.08, type: "sine" }, // 6th harmonic
+        { frequency: 1372.0, volume: 0.05, type: "sine" }, // 7th harmonic
       ],
       envelope: {
-        attack: { value: 1, time: 0.018 },
+        attack: { value: 1, time: 0.002 },
+        sustain: { value: 0.25, time: 0.025 },
         release: 0.5,
       },
+      strike: {
+        duration: 0.004,
+        gain: 0.22,
+        centerHz: 3800,
+        filterType: "highpass",
+        q: 5,
+      },
       effects: {
-        reverb: { duration: 0.32, decay: 1.1, wet: 0.5 },
+        reverb: { duration: 0.45, decay: 0.7, wet: 0.18 },
       },
     });
   }
@@ -249,34 +282,53 @@ class ChimePlayer {
     await this.createChime({
       name: "G Chime",
       tones: [
-        { frequency: 196.0, volume: 0.42, type: "sine" }, // G3 fundamental
-        { frequency: 392.0, volume: 0.25, type: "sine" }, // G4 octave
-        { frequency: 783.99, volume: 0.1, type: "sine" }, // G5 second octave
+        { frequency: 196.0, volume: 0.5, type: "sine" }, // G3 fundamental
+        { frequency: 392.0, volume: 0.25, type: "sine" }, // 2nd harmonic
+        { frequency: 588.0, volume: 0.125, type: "sine" }, // 3rd harmonic
+        { frequency: 784.0, volume: 0.06, type: "sine" }, // 4th harmonic
+        { frequency: 980.0, volume: 0.03, type: "sine" }, // 5th harmonic
       ],
       envelope: {
-        attack: { value: 1, time: 0.018 },
-        release: 0.5,
+        attack: { value: 1, time: 0.003 },
+        release: 0.45,
+      },
+      strike: {
+        duration: 0.008,
+        gain: 0.12,
+        centerHz: 2200,
+        filterType: "bandpass",
+        q: 8,
       },
       effects: {
-        reverb: { duration: 0.32, decay: 1.1, wet: 1 },
+        reverb: { duration: 0.45, decay: 0.7, wet: 0.2 },
       },
     });
     await new Promise((resolve) => setTimeout(resolve, 200));
     await this.createChime({
       name: "High C Chime",
       tones: [
-        { frequency: 261.63, volume: 0.38, type: "sine" }, // C4 fundamental
-        // { frequency: 329.63, volume: 0.13, type: "sine" }, // E4 (C4 e)
-        // { frequency: 392.0, volume: 0.13, type: "sine" }, // G4 (C4 g)
-        { frequency: 523.25, volume: 0.22, type: "sine" }, // C5 octave
-        { frequency: 1046.5, volume: 0.08, type: "sine" }, // C6 second octave
+        { frequency: 261.63, volume: 0.4, type: "sine" }, // C4 fundamental
+        { frequency: 523.25, volume: 0.35, type: "sine" }, // 2nd harmonic (stronger)
+        { frequency: 784.89, volume: 0.2, type: "sine" }, // 3rd harmonic
+        { frequency: 1046.5, volume: 0.15, type: "sine" }, // 4th harmonic
+        { frequency: 1308.13, volume: 0.1, type: "sine" }, // 5th harmonic
+        { frequency: 1570.0, volume: 0.08, type: "sine" }, // 6th harmonic
+        { frequency: 1831.0, volume: 0.05, type: "sine" }, // 7th harmonic
       ],
       envelope: {
-        attack: { value: 1.5, time: 0.02 },
-        release: 0.7,
+        attack: { value: 1.2, time: 0.001 },
+        sustain: { value: 0.35, time: 0.015 },
+        release: 0.5,
+      },
+      strike: {
+        duration: 0.003,
+        gain: 0.2,
+        centerHz: 4200,
+        filterType: "highpass",
+        q: 4,
       },
       effects: {
-        reverb: { duration: 0.5, decay: 0.9, wet: 0.4 },
+        reverb: { duration: 0.5, decay: 0.6, wet: 0.15 },
       },
     });
   }
