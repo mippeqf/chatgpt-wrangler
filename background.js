@@ -130,6 +130,13 @@ class ChatGPTTabManager {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(count > 99 ? "99+" : count.toString(), 9.5, 11);
+      } else {
+        // Show "0" in green when no ChatGPT tabs are open
+        ctx.fillStyle = "#166534"; // Dark green
+        ctx.font = "bold 18px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("0", 9.5, 11);
       }
 
       // Convert canvas to ImageData and set as icon
