@@ -15,7 +15,6 @@ class Settings {
       }
       return JSON.parse(value);
     } catch (e) {
-      console.warn(`Settings: Error reading ${key}:`, e);
       return this.defaults[key];
     }
   }
@@ -25,7 +24,6 @@ class Settings {
       this.storage.setItem(`chatgpt-wrangler-${key}`, JSON.stringify(value));
       return true;
     } catch (e) {
-      console.warn(`Settings: Error writing ${key}:`, e);
       return false;
     }
   }

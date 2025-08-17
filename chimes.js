@@ -189,7 +189,6 @@ class ChimePlayer {
       if (this.context === "offscreen") {
         // no-op in offscreen
       } else {
-        console.log(`Chime: Error playing ${config.name}:`, e);
       }
     }
   }
@@ -294,7 +293,6 @@ class ChimePlayer {
       case "PLAY_WINDOW_READY_CHIME":
         return this.playHighCChime();
       default:
-        console.warn(`Unknown chime type: ${type}`);
     }
   }
 }

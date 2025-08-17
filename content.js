@@ -23,7 +23,6 @@ class ChatGPTMonitor {
   }
 
   startMonitoring() {
-    console.log("ChatGPT Monitor: Starting to monitor page");
 
     // Wait for chat interface to be ready before initial status check
     this.waitForChatInterface(() => {
@@ -40,17 +39,10 @@ class ChatGPTMonitor {
   waitForChatInterface(callback) {
     // Check if we're on a chat page first
     if (!this.isChatPage()) {
-      console.log(
-        "ChatGPT Monitor: Not on a chat page, skipping interface wait"
-      );
       // Still set a base title for non-chat pages
       try {
         this.baseTitle = this.getCleanTitle() || "ChatGPT";
       } catch (error) {
-        console.log(
-          "ChatGPT Monitor: Error getting title on non-chat page:",
-          error
-        );
         this.baseTitle = "ChatGPT";
       }
       callback();
@@ -64,27 +56,17 @@ class ChatGPTMonitor {
       );
 
       if (proseMirrorTextarea) {
-        console.log(
-          "ChatGPT Monitor: ProseMirror textarea detected, waiting 250ms before status check"
-        );
         // Store the base title when interface is ready
         try {
           this.baseTitle = this.getCleanTitle() || "ChatGPT";
         } catch (error) {
-          console.log("ChatGPT Monitor: Error getting initial title:", error);
           this.baseTitle = "ChatGPT";
         }
         // Wait additional 250ms to ensure everything is fully initialized
         setTimeout(() => {
-          console.log(
-            "ChatGPT Monitor: Starting status monitoring after delay"
-          );
           callback();
         }, 250);
       } else {
-        console.log(
-          "ChatGPT Monitor: Waiting for ProseMirror textarea to load..."
-        );
         setTimeout(checkInterface, 500);
       }
     };
@@ -183,9 +165,6 @@ class ChatGPTMonitor {
   checkStatus() {
     // Check if extension context is still valid
     if (!chrome.runtime || !chrome.runtime.id) {
-      console.log(
-        "ChatGPT Monitor: Extension context invalidated, stopping monitoring"
-      );
       this.destroy();
       return;
     }
@@ -223,9 +202,6 @@ class ChatGPTMonitor {
       if ((statusChanged && canNotifyStatusChange) || titleChanged) {
         const oldStatus = this.currentStatus;
         if (statusChanged) {
-          console.log(
-            `ChatGPT Monitor: Status changed from ${this.currentStatus} to ${newStatus}`
-          );
           this.currentStatus = newStatus;
           this.lastStatusChange = now;
         }
@@ -239,14 +215,10 @@ class ChatGPTMonitor {
     // Look for the specific streaming stop button
     const streamingButton = this.findStreamingStopButton();
     if (streamingButton) {
-      console.log(
-        "ChatGPT Monitor: Found streaming button - status: processing"
-      );
       return "processing";
     }
 
     // Default to ready/idle
-    console.log("ChatGPT Monitor: No streaming - status: ready");
     return "ready";
   }
 
@@ -312,7 +284,6 @@ class ChatGPTMonitor {
         document.title = newTitle;
       }
     } catch (error) {
-      console.log("ChatGPT Monitor: Error updating title:", error);
     }
   }
 
@@ -331,7 +302,6 @@ class ChatGPTMonitor {
       
       // Play the chime based on background's decision and user settings
       if (response && response.chimeCommand && this.settings.getChimesEnabled()) {
-        console.log(`Content: Playing chime: ${response.chimeCommand}`);
         
         switch (response.chimeCommand) {
           case "PLAY_PROCESSING_CHIME":
@@ -345,10 +315,8 @@ class ChatGPTMonitor {
             break;
         }
       } else if (response && response.chimeCommand && !this.settings.getChimesEnabled()) {
-        console.log(`Content: Chime suppressed (disabled): ${response.chimeCommand}`);
       }
     } catch (e) {
-      console.log("Content: Error with status update or chime:", e);
     }
   }
 
@@ -381,7 +349,4 @@ if (!window.__CHATGPT_MONITOR_ACTIVE__) {
     monitor.destroy();
   });
 } else {
-  console.log(
-    "ChatGPT Monitor: Already initialized, skipping duplicate injection"
-  );
 }

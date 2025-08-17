@@ -44,7 +44,6 @@ class PopupInterface {
     this.chimesToggle.addEventListener("change", (e) => {
       const enabled = e.target.checked;
       this.settings.setChimesEnabled(enabled);
-      console.log(`Popup: Chimes ${enabled ? 'enabled' : 'disabled'}`);
     });
   }
 
@@ -52,14 +51,12 @@ class PopupInterface {
     try {
       // Only show loading on first load
       if (!this.currentTabsData) {
-        console.log("Popup: Loading tabs...");
         this.showLoading();
       }
 
       const tabs = await this.getTabsByWindow();
       this.updateTabs(tabs);
     } catch (error) {
-      console.error("Error loading tabs:", error);
       this.showError("Failed to load tabs");
     }
   }
@@ -82,7 +79,6 @@ class PopupInterface {
       this.refreshBtn.disabled = false;
       this.refreshBtn.textContent = "Refresh";
     } catch (error) {
-      console.error("Error refreshing tabs:", error);
       this.refreshBtn.disabled = false;
       this.refreshBtn.textContent = "Refresh";
       this.showError("Failed to refresh tabs");
@@ -111,7 +107,6 @@ class PopupInterface {
   }
 
   displayTabs(tabsByWindow) {
-    console.log("Popup: Displaying tabs:", tabsByWindow);
 
     const windowIds = Object.keys(tabsByWindow);
 
@@ -235,13 +230,11 @@ class PopupInterface {
       return;
     }
 
-    console.log(`Updating tab ${tabId} with status: ${tab.status}`);
 
     // Update status indicator
     const statusIndicator = tabElement.querySelector(".status-indicator");
     if (statusIndicator) {
       const newStatusClass = this.getStatusClass(tab.status);
-      console.log(`Setting status class: ${newStatusClass} for tab ${tabId}`);
       statusIndicator.className = `status-indicator ${newStatusClass}`;
     }
 
@@ -285,7 +278,6 @@ class PopupInterface {
 
   renderTabTemplate(tab) {
     if (!tab || !tab.id) {
-      console.warn("Popup: Invalid tab object:", tab);
       return "";
     }
 
@@ -319,7 +311,6 @@ class PopupInterface {
       tabItems.forEach((tabItem) => {
         const tabId = parseInt(tabItem.dataset.tabId);
         if (isNaN(tabId)) {
-          console.warn("Popup: Invalid tab ID:", tabItem.dataset.tabId);
           return;
         }
 
@@ -331,7 +322,6 @@ class PopupInterface {
 
       // No alarm buttons anymore
     } catch (error) {
-      console.error("Popup: Error attaching event listeners:", error);
     }
   }
 
@@ -371,7 +361,6 @@ class PopupInterface {
       // Close popup
       window.close();
     } catch (error) {
-      console.error("Error focusing tab:", error);
     }
   }
 
@@ -395,7 +384,6 @@ class PopupInterface {
       const debugInfo = await this.getDebugInfo();
       this.displayDebugInfo(debugInfo);
     } catch (error) {
-      console.error("Error loading debug info:", error);
       this.displayDebugError("Failed to load debug info: " + error.message);
     }
   }
@@ -533,7 +521,6 @@ class PopupInterface {
 
       return windows;
     } catch (error) {
-      console.error("Error getting tabs by window:", error);
       return {};
     }
   }
@@ -579,7 +566,6 @@ class PopupInterface {
 
       return debugInfo;
     } catch (error) {
-      console.error("Error getting debug info:", error);
       return {
         totalChatGPTTabs: 0,
         allChatGPTTabs: [],

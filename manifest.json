@@ -1,17 +1,22 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Wrangler",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Monitor ChatGPT tabs processing status with visual indicators",
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
   "permissions": ["tabs", "activeTab", "storage", "scripting", "offscreen"],
-  "host_permissions": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
+  "host_permissions": ["https://chatgpt.com/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
+      "matches": ["https://chatgpt.com/*"],
       "js": ["settings.js", "chimes.js", "content.js"],
       "run_at": "document_idle"
     }

@@ -26,31 +26,20 @@ class ChatGPTTabManager {
   }
 
   async scanExistingTabs() {
-    console.log("Background: Starting to scan existing tabs");
     try {
       this.updateBadge();
-      console.log("Background: Finished scanning existing tabs");
     } catch (error) {
-      console.error("Error scanning existing tabs:", error);
     }
   }
 
   async handleMessage(message, sender, sendResponse) {
-    console.log(`Background: Received message: ${message.type}`);
 
     switch (message.type) {
       case "GET_TABS":
         try {
           const tabs = await this.getTabsByWindow();
-          console.log(
-            `Background: Sending ${
-              Object.keys(tabs).length
-            } windows with tabs:`,
-            tabs
-          );
           sendResponse({ tabs: tabs });
         } catch (error) {
-          console.error("Error getting tabs:", error);
           sendResponse({ tabs: {} });
         }
         break;
@@ -59,7 +48,6 @@ class ChatGPTTabManager {
           const debugInfo = await this.getDebugInfo();
           sendResponse({ debugInfo });
         } catch (error) {
-          console.error("Error getting debug info:", error);
           sendResponse({ debugInfo: { error: error.message } });
         }
         break;
@@ -148,7 +136,6 @@ class ChatGPTTabManager {
       const imageData = ctx.getImageData(0, 0, 19, 19);
       chrome.action.setIcon({ imageData: { 19: imageData } });
     } catch (error) {
-      console.error("Error updating badge:", error);
     }
   }
 
@@ -199,7 +186,6 @@ class ChatGPTTabManager {
 
       return windows;
     } catch (error) {
-      console.error("Error getting tabs by window:", error);
       return {};
     }
   }
@@ -244,7 +230,6 @@ class ChatGPTTabManager {
           return "PLAY_TAB_READY_CHIME";
         }
       } catch (error) {
-        console.error("Error evaluating chime command:", error);
         return "PLAY_TAB_READY_CHIME"; // Fallback
       }
     }
@@ -310,7 +295,6 @@ class ChatGPTTabManager {
 
       return debugInfo;
     } catch (error) {
-      console.error("Error getting debug info:", error);
       return {
         totalChatGPTTabs: 0,
         allChatGPTTabs: [],
