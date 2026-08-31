@@ -2,6 +2,8 @@
 class ChatGPTTabManager {
   constructor() {
     this.windowStages = {};
+    this.networkStatusByTab = new Map();
+    this.activeNetworkRequestsByTab = new Map();
     this.init();
   }
 
@@ -19,7 +21,113 @@ class ChatGPTTabManager {
       this.handleTabRemoved(tabId);
     });
 
+    this.setupNetworkMonitoring();
     this.scanExistingTabs();
+  }
+
+  setupNetworkMonitoring() {
+    const filter = { urls: ["https://chatgpt.com/backend-api/*"] };
+
+    chrome.webRequest.onBeforeRequest.addListener((details) => {
+      if (!this.isConversationStreamRequest(details)) return;
+      this.handleConversationStreamStart(details);
+    }, filter);
+
+    chrome.webRequest.onCompleted.addListener((details) => {
+      if (!this.isConversationStreamRequest(details)) return;
+      this.handleConversationStreamCompleted(details);
+    }, filter);
+
+    chrome.webRequest.onErrorOccurred.addListener((details) => {
+      if (!this.isConversationStreamRequest(details)) return;
+      this.handleConversationStreamError(details);
+    }, filter);
+  }
+
+  isConversationStreamRequest(details) {
+    if (!details || details.tabId < 0 || details.method !== "POST") return false;
+    try {
+      const path = new URL(details.url).pathname;
+      return (
+        path === "/backend-api/f/conversation" ||
+        path === "/backend-api/conversation"
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  getActiveNetworkRequests(tabId) {
+    let requests = this.activeNetworkRequestsByTab.get(tabId);
+    if (!requests) {
+      requests = new Set();
+      this.activeNetworkRequestsByTab.set(tabId, requests);
+    }
+    return requests;
+  }
+
+  setNetworkStatus(tabId, status) {
+    this.networkStatusByTab.set(tabId, {
+      status,
+      updatedAt: Date.now(),
+    });
+  }
+
+  async sendNetworkEvent(tabId, type, details = {}) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type, ...details });
+    } catch (_) {
+      // The content script may not be mounted yet (reload/navigation race).
+    }
+  }
+
+  handleConversationStreamStart(details) {
+    const requests = this.getActiveNetworkRequests(details.tabId);
+    const wasIdle = requests.size === 0;
+    requests.add(details.requestId);
+    this.setNetworkStatus(details.tabId, "processing");
+
+    if (wasIdle) {
+      this.sendNetworkEvent(details.tabId, "NETWORK_GENERATION_START", {
+        requestId: details.requestId,
+      });
+    }
+  }
+
+  handleConversationStreamCompleted(details) {
+    const requests = this.getActiveNetworkRequests(details.tabId);
+    requests.delete(details.requestId);
+
+    if (requests.size > 0) return;
+    this.activeNetworkRequestsByTab.delete(details.tabId);
+
+    if (details.statusCode >= 400) {
+      this.setNetworkStatus(details.tabId, "uncertain");
+      this.sendNetworkEvent(details.tabId, "NETWORK_GENERATION_ERROR", {
+        requestId: details.requestId,
+        statusCode: details.statusCode,
+      });
+      return;
+    }
+
+    this.setNetworkStatus(details.tabId, "ready");
+    this.sendNetworkEvent(details.tabId, "NETWORK_GENERATION_END", {
+      requestId: details.requestId,
+      statusCode: details.statusCode,
+    });
+  }
+
+  handleConversationStreamError(details) {
+    const requests = this.getActiveNetworkRequests(details.tabId);
+    requests.delete(details.requestId);
+
+    if (requests.size > 0) return;
+    this.activeNetworkRequestsByTab.delete(details.tabId);
+    this.setNetworkStatus(details.tabId, "uncertain");
+    this.sendNetworkEvent(details.tabId, "NETWORK_GENERATION_ERROR", {
+      requestId: details.requestId,
+      error: details.error,
+    });
   }
 
   async scanExistingTabs() {
@@ -50,6 +158,30 @@ class ChatGPTTabManager {
 
       case "STATUS_UPDATE":
         try {
+          const tabId = sender.tab?.id;
+          const networkState =
+            typeof tabId === "number" ? this.networkStatusByTab.get(tabId) : null;
+
+          // Once the actual ChatGPT response stream has supplied a state, it is
+          // more authoritative than a hidden tab's potentially stale DOM. Ignore
+          // contradictory/duplicate DOM reports so they cannot overwrite the
+          // title or trigger a second completion chime later on tab activation.
+          if (networkState && message.source !== "network") {
+            const looksLikeNewGeneration =
+              message.status === "processing" &&
+              networkState.status !== "processing" &&
+              Date.now() - networkState.updatedAt > 1500;
+
+            if (looksLikeNewGeneration) {
+              // Let the DOM mark the request immediately; the webRequest start
+              // event will re-establish network authority milliseconds later.
+              this.networkStatusByTab.delete(tabId);
+            } else {
+              sendResponse({ ok: true, chimeCommand: null, ignored: true });
+              break;
+            }
+          }
+
           this.updateBadge();
           this.cleanupWindowStages();
           const chimeCommand = await this.evaluateChimeCommand(message, sender);
@@ -69,6 +201,8 @@ class ChatGPTTabManager {
   }
 
   handleTabRemoved(tabId) {
+    this.networkStatusByTab.delete(tabId);
+    this.activeNetworkRequestsByTab.delete(tabId);
     this.updateBadge();
     this.cleanupWindowStages();
   }
@@ -263,6 +397,7 @@ class ChatGPTTabManager {
       for (const tab of chatGPTTabs) {
         const status = this.inferStatusFromTitle(tab.title);
         const baseTitle = this.cleanTitle(tab.title);
+        const networkState = this.networkStatusByTab.get(tab.id);
 
         debugInfo.allChatGPTTabs.push({
           id: tab.id,
@@ -270,6 +405,9 @@ class ChatGPTTabManager {
           storedBaseTitle: baseTitle,
           url: tab.url,
           status,
+          networkStatus: networkState?.status || null,
+          activeNetworkRequests:
+            this.activeNetworkRequestsByTab.get(tab.id)?.size || 0,
           windowId: tab.windowId,
         });
       }
