@@ -50,6 +50,11 @@ class PopupInterface {
         const info = await this.getContentScriptInfo(tab.id);
         tab.contentScriptVersion = info?.version || null;
         tab.contentScriptStatus = info?.status || null;
+        tab.contentScriptReason = info?.reason || null;
+        tab.contentScriptCheckCount = info?.checkCount || 0;
+        tab.contentScriptMutationCount = info?.mutationCount || 0;
+        tab.contentScriptLastCheckAt = info?.lastCheckAt || 0;
+        tab.contentScriptLastMutationAt = info?.lastMutationAt || 0;
       })
     );
     return tabsByWindow;
@@ -107,6 +112,10 @@ class PopupInterface {
     const versionText = tab.contentScriptVersion
       ? `v${tab.contentScriptVersion}`
       : "no script";
+    const reasonText = tab.contentScriptReason ? ` · ${tab.contentScriptReason}` : "";
+    const diagnosticTitle = tab.contentScriptVersion
+      ? `reason: ${tab.contentScriptReason || "unknown"}; checks: ${tab.contentScriptCheckCount}; mutations: ${tab.contentScriptMutationCount}`
+      : "No responding content script in this tab";
 
     return `
       <div class="tab-item" data-tab-id="${Number(tab.id)}" style="cursor:pointer">
@@ -114,7 +123,9 @@ class PopupInterface {
         <div class="tab-title" title="${this.escapeHtml(tab.url || "")}">${this.escapeHtml(
       title
     )}</div>
-        <div class="status-text">${this.escapeHtml(statusText)} · ${this.escapeHtml(versionText)}</div>
+        <div class="status-text" title="${this.escapeHtml(diagnosticTitle)}">${this.escapeHtml(
+      statusText
+    )} · ${this.escapeHtml(versionText)}${this.escapeHtml(reasonText)}</div>
       </div>`;
   }
 
@@ -158,7 +169,7 @@ class PopupInterface {
       document.getElementById("debug-tab-count").textContent =
         debugInfo.totalChatGPTTabs ?? 0;
       document.getElementById("debug-injection-status").textContent =
-        `Popup v${this.extensionVersion}; per-tab content-script versions are shown above`;
+        `Popup v${this.extensionVersion}; hover each tab's status for check/mutation counts`;
 
       const tabs = debugInfo.allChatGPTTabs || [];
       document.getElementById("debug-tab-titles").innerHTML = tabs.length
