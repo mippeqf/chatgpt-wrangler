@@ -8,7 +8,7 @@
     "48": "icon.png",
     "128": "icon.png"
   },
-  "permissions": ["tabs", "storage", "webRequest"],
+  "permissions": ["tabs", "storage"],
   "host_permissions": ["https://chatgpt.com/*"],
   "background": {
     "service_worker": "background.js",
@@ -17,7 +17,7 @@
   "content_scripts": [
     {
       "matches": ["https://chatgpt.com/*"],
-      "js": ["settings.js", "chimes.js", "network-status.js", "content.js"],
+      "js": ["settings.js", "chimes.js", "content.js"],
       "run_at": "document_idle"
     }
   ],
