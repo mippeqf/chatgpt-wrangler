@@ -140,15 +140,14 @@ class ChatGPTTabManager {
   }
 
   isChatGPTTab(url) {
-    if (!url) return false;
-    return (
-      url.startsWith("https://chat.openai.com/c/") ||
-      url.startsWith("https://chatgpt.com/c/") ||
-      url === "https://chat.openai.com/" ||
-      url === "https://chatgpt.com/" ||
-      url.startsWith("https://chat.openai.com/?") ||
-      url.startsWith("https://chatgpt.com/?")
-    );
+    if (!url || typeof url !== "string") return false;
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === "https:" &&
+        (parsed.hostname === "chatgpt.com" || parsed.hostname === "chat.openai.com");
+    } catch (_) {
+      return false;
+    }
   }
 
   async getTabsByWindow() {
