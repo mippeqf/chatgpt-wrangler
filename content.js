@@ -37,7 +37,10 @@ class ChatGPTMonitor {
 
     this.observer = new MutationObserver((mutations) => {
       this.recordLatestTurnMutation(mutations);
-      this.scheduleCheck(80);
+      // Mutation callbacks are our background-safe trigger. Do not route the
+      // critical status check through setTimeout, which Chrome may throttle in
+      // hidden tabs.
+      this.checkStatus();
     });
 
     this.observer.observe(document.body, {
@@ -48,17 +51,21 @@ class ChatGPTMonitor {
       attributeFilter: [
         "class",
         "aria-busy",
+        "aria-disabled",
         "aria-label",
         "data-state",
         "data-loading",
+        "data-stream-active",
         "data-testid",
         "data-turn",
+        "disabled",
       ],
     });
 
     window.addEventListener("online", () => this.scheduleCheck(0));
     window.addEventListener("offline", () => this.scheduleCheck(0));
 
+    // Best-effort fallback only. Hidden-tab correctness must not depend on this.
     this.pollTimer = setInterval(() => this.checkStatus(), 700);
     this.checkStatus();
   }
@@ -172,10 +179,9 @@ class ChatGPTMonitor {
       return "ready";
     }
 
-    // Fallback terminal evidence: the current assistant turn has real content,
-    // no active-working/error signal, and has stopped changing for a short
-    // period. This is deliberately similar to robust browser-automation logic:
-    // completion is a stable response, not a particular composer-button shape.
+    // Fallback terminal evidence: useful in active tabs and during normal
+    // polling, but not relied upon for hidden tabs because the elapsed-time
+    // recheck can itself be throttled there.
     if (
       latestRole === "assistant" &&
       latestBelongsToGeneration &&
