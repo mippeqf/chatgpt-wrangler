@@ -5,17 +5,23 @@ class ChatGPTMonitor {
     this.baseTitle = null;
     this.observer = null;
     this.pollTimer = null;
-    this.checkTimer = null;
     this.lastStatusChange = Date.now();
 
-    // Generation latch: once a request starts, do not infer completion from a
-    // random idle-looking DOM. For the normal text path we additionally remember
-    // whether ChatGPT's explicit Stop button was actually observed.
+    // Normal response path: remember whether this generation ever exposed the
+    // same explicit Stop button used by the original Wrangler.
     this.generationObserved = false;
     this.stopButtonObserved = false;
     this.generationFloorTurnIndex = null;
     this.pendingUserTurnKey = null;
     this.pendingUserTurnSince = 0;
+
+    // Lightweight diagnostics so the popup can tell us what actually happened
+    // in a background tab rather than forcing us to infer it from the title.
+    this.lastDecisionReason = "initializing";
+    this.lastCheckAt = 0;
+    this.checkCount = 0;
+    this.lastMutationAt = 0;
+    this.mutationCount = 0;
 
     this.chimePlayer = new ChimePlayer("content");
     this.settings = new Settings();
@@ -35,9 +41,11 @@ class ChatGPTMonitor {
     this.baseTitle = this.getCleanTitle() || "ChatGPT";
 
     this.observer = new MutationObserver(() => {
-      // Mutation callbacks are the background-safe trigger. Do not route the
-      // critical status check through setTimeout, which Chrome may throttle in
-      // hidden tabs.
+      // This is the critical background path: exactly as in the original
+      // Wrangler, DOM mutations invoke the status check synchronously. No timer
+      // or debounce sits between the mutation and the decision.
+      this.mutationCount += 1;
+      this.lastMutationAt = Date.now();
       this.checkStatus();
     });
 
@@ -60,24 +68,19 @@ class ChatGPTMonitor {
       ],
     });
 
-    window.addEventListener("online", () => this.scheduleCheck(0));
-    window.addEventListener("offline", () => this.scheduleCheck(0));
+    window.addEventListener("online", () => this.checkStatus());
+    window.addEventListener("offline", () => this.checkStatus());
 
-    // Best-effort fallback only. Hidden-tab correctness must not depend on this.
+    // Best-effort fallback only. Hidden-tab correctness must not depend on it.
     this.pollTimer = setInterval(() => this.checkStatus(), 700);
     this.checkStatus();
   }
 
-  scheduleCheck(delay = 80) {
-    if (this.checkTimer) clearTimeout(this.checkTimer);
-    this.checkTimer = setTimeout(() => {
-      this.checkTimer = null;
-      this.checkStatus();
-    }, delay);
-  }
-
   checkStatus() {
     if (!chrome.runtime?.id) return this.destroy();
+
+    this.checkCount += 1;
+    this.lastCheckAt = Date.now();
 
     const newStatus = this.detectStatus();
     const oldStatus = this.currentStatus;
@@ -87,12 +90,32 @@ class ChatGPTMonitor {
 
     if (newStatus === oldStatus) {
       this.updateTitle(newStatus);
+      this.publishMonitorInfo();
       return;
     }
 
     this.currentStatus = newStatus;
     this.lastStatusChange = Date.now();
+    this.publishMonitorInfo();
     this.notifyStatusChange(newStatus, oldStatus);
+  }
+
+  decision(status, reason) {
+    this.lastDecisionReason = reason;
+    return status;
+  }
+
+  publishMonitorInfo() {
+    window.__CHATGPT_MONITOR_INFO__ = {
+      status: this.currentStatus || "unknown",
+      reason: this.lastDecisionReason,
+      generationObserved: this.generationObserved,
+      stopButtonObserved: this.stopButtonObserved,
+      checkCount: this.checkCount,
+      mutationCount: this.mutationCount,
+      lastCheckAt: this.lastCheckAt,
+      lastMutationAt: this.lastMutationAt,
+    };
   }
 
   detectStatus() {
@@ -100,22 +123,12 @@ class ChatGPTMonitor {
     const latestTurn = this.getLatestConversationTurn();
     const latestRole = this.getTurnRole(latestTurn);
     const latestKey = this.getTurnKey(latestTurn);
-
-    if (navigator.onLine === false || this.hasExplicitError(latestTurn)) {
-      return "uncertain";
-    }
-
     const stopButton = this.findStreamingStopButton();
-    const strongWorking =
-      stopButton ||
-      this.hasStreamingAnimation(latestTurn) ||
-      this.hasVisibleStreamSpinner() ||
-      this.hasInProgressIndicator(latestTurn);
 
     if (stopButton) this.stopButtonObserved = true;
 
-    // A newest user turn means a response has been requested, regardless of
-    // what the composer button currently looks like.
+    // A newest user turn latches a new generation immediately, even in the
+    // brief interval before the composer changes to Stop.
     if (latestRole === "user") {
       if (this.pendingUserTurnKey !== latestKey) {
         this.pendingUserTurnKey = latestKey;
@@ -126,61 +139,81 @@ class ChatGPTMonitor {
         this.generationFloorTurnIndex = userIndex === null ? null : userIndex + 1;
       }
 
-      return now - this.pendingUserTurnSince < 2500 || strongWorking
-        ? "processing"
-        : "uncertain";
-    }
+      if (stopButton) return this.decision("processing", "stop present");
 
-    if (strongWorking) {
-      this.generationObserved = true;
-      return "processing";
+      // Auxiliary progress signals are useful only before we have ever seen a
+      // Stop button. They cannot veto the proven Stop->gone completion path.
+      if (!this.stopButtonObserved && this.hasFallbackWorkingSignal(latestTurn)) {
+        return this.decision("processing", "fallback progress");
+      }
+
+      return now - this.pendingUserTurnSince < 2500
+        ? this.decision("processing", "new user turn")
+        : this.decision("uncertain", "awaiting assistant");
     }
 
     const latestBelongsToGeneration = this.completionBelongsToCurrentGeneration(latestTurn);
 
-    // Strongest terminal evidence: ChatGPT mounted the completed-response action
-    // toolbar (Copy/read-aloud/etc.) or a completed generated image.
+    // Keep explicit interruption/error state ahead of successful completion.
+    // This is scoped to visible/current UI by hasExplicitError().
+    if (navigator.onLine === false || this.hasExplicitError(latestTurn)) {
+      return this.decision("uncertain", "explicit error");
+    }
+
+    // Strong terminal evidence: structural completed-response controls. This
+    // does not depend on layout, animation state, timers, or CSS opacity.
     if (
       latestRole === "assistant" &&
       latestBelongsToGeneration &&
       this.hasCompletionAction(latestTurn)
     ) {
       this.resetGenerationLatch();
-      return "ready";
+      return this.decision("ready", "completion action");
     }
 
-    // Background-safe fallback, matching the original Wrangler mechanism: if we
-    // actually observed ChatGPT's Stop button during this generation and a DOM
-    // mutation now leaves us with an assistant answer and no working signal,
-    // completion is immediate. No delayed stability re-check is required.
+    // Original Wrangler's authoritative working signal.
+    if (stopButton) {
+      this.generationObserved = true;
+      return this.decision("processing", "stop present");
+    }
+
+    // Original Wrangler's authoritative completion transition, guarded only by
+    // the fact that this generation really did expose Stop and now has an
+    // assistant turn belonging to the current request. Auxiliary CSS/spinner
+    // state is deliberately NOT consulted here.
     if (
       this.generationObserved &&
       this.stopButtonObserved &&
       latestRole === "assistant" &&
-      latestBelongsToGeneration &&
-      this.hasSubstantiveAssistantContent(latestTurn)
+      latestBelongsToGeneration
     ) {
       this.resetGenerationLatch();
-      return "ready";
+      return this.decision("ready", "stop disappeared");
+    }
+
+    // Richer signals are fallback-only for unusual generations where ChatGPT
+    // never exposes the standard Stop button (tools/images/transitional UIs).
+    if (
+      this.generationObserved &&
+      !this.stopButtonObserved &&
+      this.hasFallbackWorkingSignal(latestTurn)
+    ) {
+      return this.decision("processing", "fallback progress");
     }
 
     if (this.generationObserved) {
-      // Transitional assistant shells can briefly exist before text/controls are
-      // mounted. Stay red until another DOM mutation gives us terminal evidence.
-      if (this.stopButtonObserved) return "processing";
-      return "uncertain";
+      return this.decision("uncertain", "generation without stop");
     }
 
     // Existing historical answers on page load are complete.
-    if (!latestTurn) return "ready";
-    if (
-      latestRole === "assistant" &&
-      this.hasSubstantiveAssistantContent(latestTurn)
-    ) {
-      return "ready";
+    if (!latestTurn) return this.decision("ready", "no conversation turn");
+    if (latestRole === "assistant" && this.hasSubstantiveAssistantContent(latestTurn)) {
+      return this.decision("ready", "historical assistant");
     }
 
-    return latestRole === "assistant" ? "uncertain" : this.currentStatus || "ready";
+    return latestRole === "assistant"
+      ? this.decision("uncertain", "assistant shell")
+      : this.decision(this.currentStatus || "ready", "idle");
   }
 
   getLatestConversationTurn() {
@@ -231,7 +264,6 @@ class ChatGPTMonitor {
   hasCompletionAction(turn) {
     if (!turn) return false;
 
-    // ChatGPT has used both test IDs and short aria labels (often simply "Copy").
     const actions = turn.querySelector(
       [
         'button[data-testid="copy-turn-action-button"]',
@@ -270,21 +302,38 @@ class ChatGPTMonitor {
     return Boolean((authored?.textContent || "").trim());
   }
 
+  // Keep the normal Stop-button test intentionally equivalent to the original
+  // Wrangler rather than routing it through our richer layout helper.
   findStreamingStopButton() {
-    const selectors = [
-      '#composer-submit-button[aria-label="Stop streaming"][data-testid="stop-button"]',
-      'button[data-testid="stop-button"]',
+    const streamingButton = document.querySelector(
+      '#composer-submit-button[aria-label="Stop streaming"][data-testid="stop-button"]'
+    );
+
+    if (streamingButton && streamingButton.offsetParent !== null) {
+      return streamingButton;
+    }
+
+    const fallbackSelectors = [
       'button[aria-label="Stop streaming"]',
-      'button[aria-label*="Stop" i][data-testid*="stop" i]',
+      'button[data-testid="stop-button"][aria-label*="Stop"]',
+      '#composer-submit-button[data-testid="stop-button"]',
     ];
 
-    for (const selector of selectors) {
+    for (const selector of fallbackSelectors) {
       try {
-        const visible = [...document.querySelectorAll(selector)].find((el) => this.isVisible(el));
-        if (visible) return visible;
+        const element = document.querySelector(selector);
+        if (element && element.offsetParent !== null) return element;
       } catch (_) {}
     }
     return null;
+  }
+
+  hasFallbackWorkingSignal(turn) {
+    return (
+      this.hasStreamingAnimation(turn) ||
+      this.hasVisibleStreamSpinner() ||
+      this.hasInProgressIndicator(turn)
+    );
   }
 
   hasStreamingAnimation(turn) {
@@ -392,6 +441,7 @@ class ChatGPTMonitor {
 
   async notifyStatusChange(status, oldStatus) {
     this.updateTitle(status);
+    this.publishMonitorInfo();
     try {
       const response = await chrome.runtime.sendMessage({
         type: "STATUS_UPDATE",
@@ -410,7 +460,6 @@ class ChatGPTMonitor {
   destroy() {
     if (this.observer) this.observer.disconnect();
     if (this.pollTimer) clearInterval(this.pollTimer);
-    if (this.checkTimer) clearTimeout(this.checkTimer);
   }
 }
 
