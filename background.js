@@ -1,4 +1,4 @@
-// Background script for managing tabs and updating badges/titles
+// Background script for managing tabs and updating badges/titles.
 class ChatGPTTabManager {
   constructor() {
     this.windowStages = {};
@@ -8,7 +8,7 @@ class ChatGPTTabManager {
   init() {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       this.handleMessage(message, sender, sendResponse);
-      return true; // Keep message channel open for async response
+      return true;
     });
 
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -19,47 +19,43 @@ class ChatGPTTabManager {
       this.handleTabRemoved(tabId);
     });
 
-    // No storage listener needed after removing alarms
-
     this.scanExistingTabs();
-    // No periodic evaluation after removing alarms
   }
 
   async scanExistingTabs() {
     try {
       this.updateBadge();
     } catch (error) {
+      // Ignore startup races.
     }
   }
 
   async handleMessage(message, sender, sendResponse) {
-
     switch (message.type) {
       case "GET_TABS":
         try {
-          const tabs = await this.getTabsByWindow();
-          sendResponse({ tabs: tabs });
+          sendResponse({ tabs: await this.getTabsByWindow() });
         } catch (error) {
           sendResponse({ tabs: {} });
         }
         break;
+
       case "GET_DEBUG_INFO":
         try {
-          const debugInfo = await this.getDebugInfo();
-          sendResponse({ debugInfo });
+          sendResponse({ debugInfo: await this.getDebugInfo() });
         } catch (error) {
           sendResponse({ debugInfo: { error: error.message } });
         }
         break;
+
       case "STATUS_UPDATE":
-        // Tab status changed - determine which chime to play
         try {
           this.updateBadge();
           this.cleanupWindowStages();
           const chimeCommand = await this.evaluateChimeCommand(message, sender);
           sendResponse({ ok: true, chimeCommand });
-        } catch (e) {
-          sendResponse({ ok: false, error: e?.message });
+        } catch (error) {
+          sendResponse({ ok: false, error: error?.message });
         }
         break;
     }
@@ -67,33 +63,32 @@ class ChatGPTTabManager {
 
   handleTabUpdate(tabId, changeInfo, tab) {
     if (this.isChatGPTTab(tab.url)) {
-      // Update badge when ChatGPT tabs change
       this.updateBadge();
       this.cleanupWindowStages();
     }
   }
 
   handleTabRemoved(tabId) {
-    // Update badge when any tab is removed
     this.updateBadge();
     this.cleanupWindowStages();
   }
 
   cleanTitle(title) {
     if (!title || typeof title !== "string") return "ChatGPT";
-    return title.replace(/^(🔴|🟢)\s+/, "").trim();
+    return title.replace(/^(🔴|🟢|🟡)\s+/, "").trim();
   }
 
   inferStatusFromTitle(title) {
     if (!title || typeof title !== "string") return "ready";
-
-    // Check for red circle emoji indicating processing
-    if (title.startsWith("🔴")) {
-      return "processing";
-    }
-
-    // Check for green circle emoji or default to ready
+    if (title.startsWith("🔴")) return "processing";
+    if (title.startsWith("🟡")) return "uncertain";
     return "ready";
+  }
+
+  statusPrefix(status) {
+    if (status === "processing") return "🔴 ";
+    if (status === "uncertain") return "🟡 ";
+    return "🟢 ";
   }
 
   async updateBadge() {
@@ -104,51 +99,48 @@ class ChatGPTTabManager {
       const processingCount = chatGPTTabs.filter(
         (tab) => this.inferStatusFromTitle(tab.title) === "processing"
       ).length;
-
+      const uncertainCount = chatGPTTabs.filter(
+        (tab) => this.inferStatusFromTitle(tab.title) === "uncertain"
+      ).length;
       const totalCount = chatGPTTabs.length;
 
-      // Clear badge and use dynamic icon instead
       chrome.action.setBadgeText({ text: "" });
 
-      // Generate dynamic icon with count
       const canvas = new OffscreenCanvas(19, 19);
       const ctx = canvas.getContext("2d");
-
-      // Clear canvas with transparent background
       ctx.clearRect(0, 0, 19, 19);
 
-      if (totalCount > 0) {
-        const count = processingCount > 0 ? processingCount : totalCount;
-        const textColor = processingCount > 0 ? "#dc2626" : "#166534"; // Red or dark green
+      let count = totalCount;
+      let textColor = "#166534";
 
-        // Draw text only (no background)
-        ctx.fillStyle = textColor;
-        ctx.font =
-          "bold " +
-          (count > 99 ? "12px" : count > 9 ? "16px" : "18px") +
-          " Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(count > 99 ? "99+" : count.toString(), 9.5, 11);
-      } else {
-        // Show "0" in green when no ChatGPT tabs are open
-        ctx.fillStyle = "#166534"; // Dark green
-        ctx.font = "bold 18px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("0", 9.5, 11);
+      if (processingCount > 0) {
+        count = processingCount;
+        textColor = "#dc2626";
+      } else if (uncertainCount > 0) {
+        count = uncertainCount;
+        textColor = "#b45309";
       }
 
-      // Convert canvas to ImageData and set as icon
+      if (totalCount === 0) count = 0;
+
+      ctx.fillStyle = textColor;
+      ctx.font =
+        "bold " +
+        (count > 99 ? "12px" : count > 9 ? "16px" : "18px") +
+        " Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(count > 99 ? "99+" : count.toString(), 9.5, 11);
+
       const imageData = ctx.getImageData(0, 0, 19, 19);
       chrome.action.setIcon({ imageData: { 19: imageData } });
     } catch (error) {
+      // Ignore transient tab/service-worker errors.
     }
   }
 
   isChatGPTTab(url) {
     if (!url) return false;
-    // Monitor actual chat pages and the main chat interface
     return (
       url.startsWith("https://chat.openai.com/c/") ||
       url.startsWith("https://chatgpt.com/c/") ||
@@ -163,28 +155,23 @@ class ChatGPTTabManager {
     try {
       const allTabs = await chrome.tabs.query({});
       const chatGPTTabs = allTabs.filter((tab) => this.isChatGPTTab(tab.url));
-
       const windows = {};
 
       for (const tab of chatGPTTabs) {
-        if (!windows[tab.windowId]) {
-          windows[tab.windowId] = [];
-        }
+        if (!windows[tab.windowId]) windows[tab.windowId] = [];
 
         const status = this.inferStatusFromTitle(tab.title);
         const baseTitle = this.cleanTitle(tab.title);
-        const prefix = status === "processing" ? "🔴 " : "🟢 ";
 
         windows[tab.windowId].push({
           id: tab.id,
-          status: status,
-          baseTitle: baseTitle,
-          title: prefix + baseTitle,
+          status,
+          baseTitle,
+          title: this.statusPrefix(status) + baseTitle,
           url: tab.url,
         });
       }
 
-      // Sort tabs in each window
       for (const windowId in windows) {
         windows[windowId].sort((a, b) =>
           a.baseTitle.localeCompare(b.baseTitle)
@@ -197,51 +184,45 @@ class ChatGPTTabManager {
     }
   }
 
-  // Removed alarm-related methods and notifications
-
-  // Offscreen methods no longer needed - chimes play directly in content scripts
-
   async evaluateChimeCommand(message, sender) {
     const { status, oldStatus } = message;
     const windowId = sender.tab.windowId.toString();
-    
-    // Processing chime - also mark window stage as started
+
     if (status === "processing" && oldStatus !== "processing") {
       const stage = this.windowStages[windowId] || { started: false };
       stage.started = true;
       this.windowStages[windowId] = stage;
       return "PLAY_PROCESSING_CHIME";
     }
-    
-    // Ready chime - check if this completes the window
-    if (status === "ready" && oldStatus === "processing") {
+
+    // Yellow is intentionally silent: it represents uncertainty/interruption,
+    // not successful completion. If the same generation later finishes, the
+    // ready transition still chimes.
+    if (
+      status === "ready" &&
+      (oldStatus === "processing" || oldStatus === "uncertain")
+    ) {
       try {
         const windows = await this.getTabsByWindow();
         const tabs = windows[windowId];
-        
-        if (!tabs || tabs.length === 0) {
-          return "PLAY_TAB_READY_CHIME"; // Fallback to tab chime
-        }
-        
-        // Check if all tabs in window are ready
-        const allReady = tabs.every((t) => t.status === "ready");
+
+        if (!tabs || tabs.length === 0) return "PLAY_TAB_READY_CHIME";
+
+        const allReady = tabs.every((tab) => tab.status === "ready");
         const stage = this.windowStages[windowId] || { started: false };
-        
+
         if (allReady && stage.started) {
-          // Window complete! Reset stage and play window chime
           stage.started = false;
           this.windowStages[windowId] = stage;
           return "PLAY_WINDOW_READY_CHIME";
-        } else {
-          // Just this tab is ready
-          return "PLAY_TAB_READY_CHIME";
         }
+
+        return "PLAY_TAB_READY_CHIME";
       } catch (error) {
-        return "PLAY_TAB_READY_CHIME"; // Fallback
+        return "PLAY_TAB_READY_CHIME";
       }
     }
-    
-    // No chime needed
+
     return null;
   }
 
@@ -250,14 +231,11 @@ class ChatGPTTabManager {
       const windows = await this.getTabsByWindow();
       const knownWindowIds = new Set(Object.keys(windows));
 
-      // Cleanup stages for windows that no longer exist
-      for (const wid of Object.keys(this.windowStages)) {
-        if (!knownWindowIds.has(wid)) {
-          delete this.windowStages[wid];
-        }
+      for (const windowId of Object.keys(this.windowStages)) {
+        if (!knownWindowIds.has(windowId)) delete this.windowStages[windowId];
       }
-    } catch (e) {
-      // ignore
+    } catch (error) {
+      // Ignore cleanup races.
     }
   }
 
@@ -265,13 +243,10 @@ class ChatGPTTabManager {
     try {
       const allTabs = await chrome.tabs.query({});
       const chatGPTTabs = allTabs.filter((tab) => this.isChatGPTTab(tab.url));
-
-      // Debug: Also get tabs that might be ChatGPT but don't match our filter
       const potentialChatGPTTabs = allTabs.filter(
         (tab) =>
           tab.url &&
-          (tab.url.includes("chatgpt.com") ||
-            tab.url.includes("chat.openai.com"))
+          (tab.url.includes("chatgpt.com") || tab.url.includes("chat.openai.com"))
       );
 
       const debugInfo = {
@@ -285,7 +260,6 @@ class ChatGPTTabManager {
         })),
       };
 
-      // Get all ChatGPT tabs with inferred status
       for (const tab of chatGPTTabs) {
         const status = this.inferStatusFromTitle(tab.title);
         const baseTitle = this.cleanTitle(tab.title);
@@ -295,7 +269,7 @@ class ChatGPTTabManager {
           currentTitle: tab.title,
           storedBaseTitle: baseTitle,
           url: tab.url,
-          status: status,
+          status,
           windowId: tab.windowId,
         });
       }
@@ -309,10 +283,6 @@ class ChatGPTTabManager {
       };
     }
   }
-
-  // Message bus for offscreen chime
-  // The offscreen document listens for PLAY_CHIME and plays an audio.
 }
 
-// Initialize the tab manager
 new ChatGPTTabManager();
