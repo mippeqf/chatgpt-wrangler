@@ -10,6 +10,18 @@ class ChimePlayer {
   async createChime(config) {
     try {
       const ctx = new this.AudioContext();
+
+      // Chrome creates Web Audio contexts in a suspended state when autoplay is
+      // not permitted for the page. Starting sources in that state produces an
+      // extension error entry. Skip the chime rather than fighting autoplay;
+      // subsequent chimes still work normally once Chrome allows audio.
+      if (this.context !== "offscreen" && ctx.state !== "running") {
+        try {
+          await ctx.close();
+        } catch (_) {}
+        return;
+      }
+
       const masterGain = ctx.createGain();
       // Final mix bus (enables simple dry/wet effects routing)
       const finalMix = ctx.createGain();
