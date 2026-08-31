@@ -8,10 +8,14 @@ class PopupInterface {
     this.chimesToggle = document.getElementById("chimes-toggle");
     this.debugMode = false;
     this.settings = new Settings();
+    this.extensionVersion = chrome.runtime.getManifest().version;
     this.init();
   }
 
   init() {
+    const header = document.querySelector(".header");
+    if (header) header.textContent = `ChatGPT Tab Monitor v${this.extensionVersion}`;
+
     this.chimesToggle.checked = this.settings.getChimesEnabled();
     this.chimesToggle.addEventListener("change", (event) => {
       this.settings.setChimesEnabled(event.target.checked);
@@ -28,10 +32,34 @@ class PopupInterface {
     return await chrome.runtime.sendMessage(message);
   }
 
+  async getContentScriptInfo(tabId) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: "GET_MONITOR_INFO",
+      });
+      return response || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async addContentScriptVersions(tabsByWindow) {
+    const tabs = Object.values(tabsByWindow).flat();
+    await Promise.all(
+      tabs.map(async (tab) => {
+        const info = await this.getContentScriptInfo(tab.id);
+        tab.contentScriptVersion = info?.version || null;
+        tab.contentScriptStatus = info?.status || null;
+      })
+    );
+    return tabsByWindow;
+  }
+
   async loadTabs() {
     try {
       const response = await this.sendMessage({ type: "GET_TABS" });
-      this.renderTabs(response?.tabs || {});
+      const tabs = await this.addContentScriptVersions(response?.tabs || {});
+      this.renderTabs(tabs);
       if (this.debugMode) this.loadDebugInfo();
     } catch (error) {
       this.tabsContainer.innerHTML = '<div class="no-tabs">Failed to load tabs</div>';
@@ -76,6 +104,9 @@ class PopupInterface {
     const statusText = this.getStatusText(tab.status);
     const statusStyle = tab.status === "uncertain" ? ' style="background:#f0ad4e"' : "";
     const title = tab.title || tab.baseTitle || "ChatGPT";
+    const versionText = tab.contentScriptVersion
+      ? `v${tab.contentScriptVersion}`
+      : "no script";
 
     return `
       <div class="tab-item" data-tab-id="${Number(tab.id)}" style="cursor:pointer">
@@ -83,7 +114,7 @@ class PopupInterface {
         <div class="tab-title" title="${this.escapeHtml(tab.url || "")}">${this.escapeHtml(
       title
     )}</div>
-        <div class="status-text">${statusText}</div>
+        <div class="status-text">${this.escapeHtml(statusText)} · ${this.escapeHtml(versionText)}</div>
       </div>`;
   }
 
@@ -127,7 +158,7 @@ class PopupInterface {
       document.getElementById("debug-tab-count").textContent =
         debugInfo.totalChatGPTTabs ?? 0;
       document.getElementById("debug-injection-status").textContent =
-        "Status inferred from content-script state (red / green / yellow)";
+        `Popup v${this.extensionVersion}; per-tab content-script versions are shown above`;
 
       const tabs = debugInfo.allChatGPTTabs || [];
       document.getElementById("debug-tab-titles").innerHTML = tabs.length
