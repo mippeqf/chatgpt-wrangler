@@ -154,14 +154,21 @@ class ChatGPTMonitor {
 
     const latestBelongsToGeneration = this.completionBelongsToCurrentGeneration(latestTurn);
 
-    // Keep explicit interruption/error state ahead of successful completion.
-    // This is scoped to visible/current UI by hasExplicitError().
+    // Keep explicit interruption/error state first.
     if (navigator.onLine === false || this.hasExplicitError(latestTurn)) {
       return this.decision("uncertain", "explicit error");
     }
 
-    // Strong terminal evidence: structural completed-response controls. This
-    // does not depend on layout, animation state, timers, or CSS opacity.
+    // The explicit Stop button is authoritative while present. This must outrank
+    // message-internal Copy buttons in code blocks, writing/edit blocks, etc.
+    if (stopButton) {
+      this.generationObserved = true;
+      return this.decision("processing", "stop present");
+    }
+
+    // Strong terminal evidence: only response-level controls that are specific
+    // to a completed assistant message. Generic aria-label="Copy" is excluded
+    // because code/edit blocks expose their own Copy buttons while streaming.
     if (
       latestRole === "assistant" &&
       latestBelongsToGeneration &&
@@ -169,12 +176,6 @@ class ChatGPTMonitor {
     ) {
       this.resetGenerationLatch();
       return this.decision("ready", "completion action");
-    }
-
-    // Original Wrangler's authoritative working signal.
-    if (stopButton) {
-      this.generationObserved = true;
-      return this.decision("processing", "stop present");
     }
 
     // Original Wrangler's authoritative completion transition, guarded only by
@@ -270,8 +271,9 @@ class ChatGPTMonitor {
         'button[data-testid*="copy-turn" i]',
         '[data-testid*="good-response" i]',
         '[data-testid*="bad-response" i]',
-        'button[aria-label="Copy" i]',
-        'button[aria-label*="Copy response" i]',
+        'button[data-testid*="share" i]',
+        'button[aria-label="Share" i]',
+        'button[aria-label*="Share response" i]',
         'button[aria-label*="Read aloud" i]',
       ].join(",")
     );
